@@ -90,18 +90,35 @@ class MeloraAudioHandler extends BaseAudioHandler
     }
   }
 
+  // ✅ FIX: متد کمکی برای ساخت AudioSource صحیح
+  AudioSource _createAudioSource(SongModel song) {
+    if (song.isOnline) {
+      // آنلاین → URI معمولی
+      return AudioSource.uri(Uri.parse(song.uri));
+    }
+
+    // آفلاین → اول مسیر واقعی فایل، بعد content URI
+    if (song.path != null && song.path!.startsWith('/')) {
+      // مسیر فایل واقعی مثل /storage/emulated/0/Music/song.mp3
+      return AudioSource.file(song.path!);
+    }
+
+    // اگر مسیر واقعی نبود، از content:// URI استفاده کن
+    if (song.uri.startsWith('content://')) {
+      return AudioSource.uri(Uri.parse(song.uri));
+    }
+
+    // fallback
+    return AudioSource.uri(Uri.parse(song.uri));
+  }
+
   Future<void> loadPlaylist(List<SongModel> songs, {int startIndex = 0}) async {
     _playlist.add(songs);
     _currentIndex.add(startIndex);
 
+    // ✅ FIX: استفاده از _createAudioSource
     _audioSource = ConcatenatingAudioSource(
-      children: songs.map((song) {
-        if (song.isOnline) {
-          return AudioSource.uri(Uri.parse(song.uri));
-        } else {
-          return AudioSource.file(song.uri);
-        }
-      }).toList(),
+      children: songs.map(_createAudioSource).toList(),
     );
 
     await _player.setAudioSource(_audioSource!, initialIndex: startIndex);
@@ -153,8 +170,8 @@ class MeloraAudioHandler extends BaseAudioHandler
   }
 
   @override
-  Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
-    final loopMode = switch (repeatMode) {
+  Future<void> setRepeatMode(AudioServiceRepeatMode mode) async {
+    final loopMode = switch (mode) {
       AudioServiceRepeatMode.none => LoopMode.off,
       AudioServiceRepeatMode.one => LoopMode.one,
       AudioServiceRepeatMode.all => LoopMode.all,
@@ -163,7 +180,6 @@ class MeloraAudioHandler extends BaseAudioHandler
     await _player.setLoopMode(loopMode);
   }
 
-  /// متد کمکی برای استفاده مستقیم LoopMode از UI
   Future<void> setPlayerLoopMode(LoopMode mode) async {
     await _player.setLoopMode(mode);
   }
@@ -172,19 +188,17 @@ class MeloraAudioHandler extends BaseAudioHandler
     await _player.setVolume(volume);
   }
 
+  // ✅ FIX: استفاده از _createAudioSource
   Future<void> addToQueue(SongModel song) async {
     final updatedList = List<SongModel>.from(_playlist.value)..add(song);
     _playlist.add(updatedList);
 
     if (_audioSource != null) {
-      if (song.isOnline) {
-        await _audioSource!.add(AudioSource.uri(Uri.parse(song.uri)));
-      } else {
-        await _audioSource!.add(AudioSource.file(song.uri));
-      }
+      await _audioSource!.add(_createAudioSource(song));
     }
   }
 
+  // ✅ FIX: استفاده از _createAudioSource
   Future<void> playAfterCurrent(SongModel song) async {
     final insertIndex = _currentIndex.value + 1;
     final updatedList = List<SongModel>.from(_playlist.value)
@@ -192,14 +206,7 @@ class MeloraAudioHandler extends BaseAudioHandler
     _playlist.add(updatedList);
 
     if (_audioSource != null) {
-      if (song.isOnline) {
-        await _audioSource!.insert(
-          insertIndex,
-          AudioSource.uri(Uri.parse(song.uri)),
-        );
-      } else {
-        await _audioSource!.insert(insertIndex, AudioSource.file(song.uri));
-      }
+      await _audioSource!.insert(insertIndex, _createAudioSource(song));
     }
   }
 

@@ -13,7 +13,6 @@ import 'shared/providers/app_providers.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // System UI
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -25,32 +24,23 @@ Future<void> main() async {
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  // Initialize Hive
   await Hive.initFlutter();
   await Hive.openBox('melora_settings');
 
-  // Initialize Favorites
   final favoritesService = FavoritesService();
   await favoritesService.init();
 
-  // ✅ Initialize Audio Service with error handling
-  late MeloraAudioHandler audioHandler;
-  try {
-    audioHandler = await AudioService.init(
-      builder: () => MeloraAudioHandler(),
-      config: const AudioServiceConfig(
-        androidNotificationChannelId: 'com.melora.music.channel',
-        androidNotificationChannelName: 'Melora Music',
-        androidNotificationOngoing: true,
-        androidStopForegroundOnPause: true,
-        androidNotificationIcon: 'mipmap/ic_launcher',
-      ),
-    );
-  } catch (e) {
-    debugPrint('AudioService init error: $e');
-    // ✅ Fallback: ساخت handler بدون AudioService
-    audioHandler = MeloraAudioHandler();
-  }
+  // ✅ حالا با AudioServiceActivity کار می‌کنه
+  final audioHandler = await AudioService.init(
+    builder: () => MeloraAudioHandler(),
+    config: const AudioServiceConfig(
+      androidNotificationChannelId: 'com.melora.music.channel',
+      androidNotificationChannelName: 'Melora Music',
+      androidNotificationOngoing: true,
+      androidStopForegroundOnPause: true,
+      androidNotificationIcon: 'mipmap/ic_launcher',
+    ),
+  );
 
   runApp(
     ProviderScope(

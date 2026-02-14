@@ -86,17 +86,25 @@ class MusicScannerService {
         .toList();
   }
 
+  // ✅ FIX: ذخیره صحیح uri و path
   SongModel _convertSong(oaq.SongModel song) {
+    // song.data = مسیر واقعی فایل: /storage/emulated/0/Music/song.mp3
+    // song.uri  = content URI: content://media/external/audio/media/123
+    final filePath = song.data;
+    final contentUri = song.uri;
+
     return SongModel(
       id: song.id,
       title: song.title,
       artist: song.artist ?? 'Unknown Artist',
       album: song.album ?? 'Unknown Album',
       duration: Duration(milliseconds: song.duration ?? 0),
-      uri: song.uri ?? song.data,
-      path: song.data,
+      // ✅ uri: ترجیحاً content URI برای fallback
+      uri: contentUri ?? filePath,
+      // ✅ path: مسیر واقعی فایل برای پخش
+      path: filePath,
       size: song.size,
-      folder: p.dirname(song.data),
+      folder: p.dirname(filePath),
       isOnline: false,
     );
   }
