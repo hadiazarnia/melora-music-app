@@ -12,6 +12,7 @@ class MeloraSearchBar extends StatelessWidget {
   final VoidCallback? onTap;
   final bool readOnly;
   final Widget? trailing;
+  final FocusNode? focusNode;
 
   const MeloraSearchBar({
     super.key,
@@ -21,34 +22,39 @@ class MeloraSearchBar extends StatelessWidget {
     this.onTap,
     this.readOnly = false,
     this.trailing,
+    this.focusNode,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 48,
+      height: 50,
       decoration: BoxDecoration(
         color: context.isDark
             ? MeloraColors.darkSurfaceLight
             : MeloraColors.lightSurfaceLight,
         borderRadius: BorderRadius.circular(MeloraDimens.radiusMd),
-        border: Border.all(color: context.borderColor, width: 0.5),
+        border: Border.all(
+          color: context.borderColor.withAlpha(128),
+          width: 0.5,
+        ),
       ),
       child: TextField(
         controller: controller,
+        focusNode: focusNode,
         onChanged: onChanged,
         onTap: onTap,
         readOnly: readOnly,
         style: TextStyle(
           fontFamily: 'Outfit',
-          fontSize: 14,
+          fontSize: 15,
           color: context.textPrimary,
         ),
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: TextStyle(
             fontFamily: 'Outfit',
-            fontSize: 14,
+            fontSize: 15,
             color: context.textTertiary,
           ),
           prefixIcon: Icon(

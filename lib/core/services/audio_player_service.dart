@@ -8,6 +8,7 @@ class MeloraAudioHandler extends BaseAudioHandler
   final AudioPlayer _player = AudioPlayer();
   final BehaviorSubject<List<SongModel>> _playlist = BehaviorSubject.seeded([]);
   final BehaviorSubject<int> _currentIndex = BehaviorSubject.seeded(0);
+  final BehaviorSubject<double> _audioLevel = BehaviorSubject.seeded(0.0);
 
   ConcatenatingAudioSource? _audioSource;
   bool _shuffleEnabled = false;
@@ -15,10 +16,13 @@ class MeloraAudioHandler extends BaseAudioHandler
   AudioPlayer get player => _player;
   Stream<List<SongModel>> get playlistStream => _playlist.stream;
   Stream<int> get currentIndexStream => _currentIndex.stream;
+  Stream<double> get audioLevelStream => _audioLevel.stream;
   List<SongModel> get currentPlaylist => _playlist.value;
   int get currentIndex => _currentIndex.value;
   SongModel? get currentSong =>
-      _playlist.value.isNotEmpty ? _playlist.value[_currentIndex.value] : null;
+      _playlist.value.isNotEmpty && _currentIndex.value < _playlist.value.length
+      ? _playlist.value[_currentIndex.value]
+      : null;
   bool get shuffleEnabled => _shuffleEnabled;
 
   MeloraAudioHandler() {
@@ -26,8 +30,10 @@ class MeloraAudioHandler extends BaseAudioHandler
   }
 
   Future<void> _init() async {
+    // Listen to playback events
     _player.playbackEventStream.listen(_broadcastState);
 
+    // Listen to current index changes
     _player.currentIndexStream.listen((index) {
       if (index != null && index < _playlist.value.length) {
         _currentIndex.add(index);
@@ -35,9 +41,21 @@ class MeloraAudioHandler extends BaseAudioHandler
       }
     });
 
+    // Listen to processing state for auto-next
     _player.processingStateStream.listen((state) {
       if (state == ProcessingState.completed) {
         skipToNext();
+      }
+    });
+
+    // Simulate audio level from position changes (for visualization)
+    _player.positionStream.listen((position) {
+      if (_player.playing) {
+        // Simple pseudo-random audio level based on position
+        final level = (position.inMilliseconds % 1000) / 1000.0;
+        _audioLevel.add(0.3 + (level * 0.7));
+      } else {
+        _audioLevel.add(0.0);
       }
     });
   }
@@ -79,44 +97,40 @@ class MeloraAudioHandler extends BaseAudioHandler
       final song = _playlist.value[index];
       mediaItem.add(
         MediaItem(
-          id: song.uri,
+          id: song.id.toString(),
           title: song.displayTitle,
           artist: song.displayArtist,
           album: song.displayAlbum,
           duration: song.duration,
           artUri: song.albumArt != null ? Uri.parse(song.albumArt!) : null,
+          extras: {'songId': song.id, 'uri': song.uri, 'path': song.path},
         ),
       );
     }
   }
 
-  // ✅ FIX: متد کمکی برای ساخت AudioSource صحیح
   AudioSource _createAudioSource(SongModel song) {
     if (song.isOnline) {
-      // آنلاین → URI معمولی
       return AudioSource.uri(Uri.parse(song.uri));
     }
 
-    // آفلاین → اول مسیر واقعی فایل، بعد content URI
     if (song.path != null && song.path!.startsWith('/')) {
-      // مسیر فایل واقعی مثل /storage/emulated/0/Music/song.mp3
       return AudioSource.file(song.path!);
     }
 
-    // اگر مسیر واقعی نبود، از content:// URI استفاده کن
     if (song.uri.startsWith('content://')) {
       return AudioSource.uri(Uri.parse(song.uri));
     }
 
-    // fallback
     return AudioSource.uri(Uri.parse(song.uri));
   }
 
   Future<void> loadPlaylist(List<SongModel> songs, {int startIndex = 0}) async {
+    if (songs.isEmpty) return;
+
     _playlist.add(songs);
     _currentIndex.add(startIndex);
 
-    // ✅ FIX: استفاده از _createAudioSource
     _audioSource = ConcatenatingAudioSource(
       children: songs.map(_createAudioSource).toList(),
     );
@@ -127,11 +141,20 @@ class MeloraAudioHandler extends BaseAudioHandler
   }
 
   Future<void> playSong(SongModel song, {List<SongModel>? queue}) async {
-    if (queue != null) {
-      final index = queue.indexOf(song);
+    if (queue != null && queue.isNotEmpty) {
+      final index = queue.indexWhere((s) => s.id == song.id);
       await loadPlaylist(queue, startIndex: index >= 0 ? index : 0);
     } else {
       await loadPlaylist([song]);
+    }
+  }
+
+  Future<void> playAtIndex(int index) async {
+    if (index >= 0 && index < _playlist.value.length) {
+      await _player.seek(Duration.zero, index: index);
+      _currentIndex.add(index);
+      _updateMediaItem(index);
+      play();
     }
   }
 
@@ -144,6 +167,7 @@ class MeloraAudioHandler extends BaseAudioHandler
   @override
   Future<void> stop() async {
     await _player.stop();
+    _audioLevel.add(0.0);
     await super.stop();
   }
 
@@ -154,12 +178,17 @@ class MeloraAudioHandler extends BaseAudioHandler
   Future<void> skipToNext() async {
     if (_currentIndex.value < _playlist.value.length - 1) {
       await _player.seekToNext();
+    } else if (_player.loopMode == LoopMode.all) {
+      await playAtIndex(0);
     }
   }
 
   @override
   Future<void> skipToPrevious() async {
-    if (_currentIndex.value > 0) {
+    // If more than 3 seconds into song, restart it
+    if (_player.position.inSeconds > 3) {
+      await seek(Duration.zero);
+    } else if (_currentIndex.value > 0) {
       await _player.seekToPrevious();
     }
   }
@@ -180,15 +209,28 @@ class MeloraAudioHandler extends BaseAudioHandler
     await _player.setLoopMode(loopMode);
   }
 
-  Future<void> setPlayerLoopMode(LoopMode mode) async {
+  Future<void> setLoopMode(LoopMode mode) async {
     await _player.setLoopMode(mode);
   }
 
-  Future<void> setVolume(double volume) async {
-    await _player.setVolume(volume);
+  Future<void> cycleLoopMode() async {
+    final current = _player.loopMode;
+    final next = switch (current) {
+      LoopMode.off => LoopMode.all,
+      LoopMode.all => LoopMode.one,
+      LoopMode.one => LoopMode.off,
+    };
+    await setLoopMode(next);
   }
 
-  // ✅ FIX: استفاده از _createAudioSource
+  Future<void> setVolume(double volume) async {
+    await _player.setVolume(volume.clamp(0.0, 1.0));
+  }
+
+  Future<void> setSpeed(double speed) async {
+    await _player.setSpeed(speed.clamp(0.5, 2.0));
+  }
+
   Future<void> addToQueue(SongModel song) async {
     final updatedList = List<SongModel>.from(_playlist.value)..add(song);
     _playlist.add(updatedList);
@@ -198,7 +240,6 @@ class MeloraAudioHandler extends BaseAudioHandler
     }
   }
 
-  // ✅ FIX: استفاده از _createAudioSource
   Future<void> playAfterCurrent(SongModel song) async {
     final insertIndex = _currentIndex.value + 1;
     final updatedList = List<SongModel>.from(_playlist.value)
@@ -210,10 +251,47 @@ class MeloraAudioHandler extends BaseAudioHandler
     }
   }
 
+  Future<void> removeFromQueue(int index) async {
+    if (index < 0 || index >= _playlist.value.length) return;
+    if (index == _currentIndex.value) return; // Can't remove current song
+
+    final updatedList = List<SongModel>.from(_playlist.value)..removeAt(index);
+    _playlist.add(updatedList);
+
+    if (_audioSource != null) {
+      await _audioSource!.removeAt(index);
+    }
+
+    // Adjust current index if needed
+    if (index < _currentIndex.value) {
+      _currentIndex.add(_currentIndex.value - 1);
+    }
+  }
+
+  Future<void> clearQueue() async {
+    final current = currentSong;
+    if (current != null) {
+      _playlist.add([current]);
+      _currentIndex.add(0);
+
+      _audioSource = ConcatenatingAudioSource(
+        children: [_createAudioSource(current)],
+      );
+      await _player.setAudioSource(_audioSource!, initialIndex: 0);
+    }
+  }
+
   @override
   Future<void> onTaskRemoved() async {
     await stop();
     await _player.dispose();
+  }
+
+  void dispose() {
+    _playlist.close();
+    _currentIndex.close();
+    _audioLevel.close();
+    _player.dispose();
   }
 }
 
@@ -223,4 +301,9 @@ class PositionData {
   final Duration duration;
 
   PositionData(this.position, this.bufferedPosition, this.duration);
+
+  double get progress {
+    if (duration.inMilliseconds == 0) return 0.0;
+    return (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+  }
 }

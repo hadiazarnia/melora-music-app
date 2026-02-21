@@ -31,8 +31,10 @@ class SongModel extends Equatable {
 
   String get displayTitle =>
       title.isNotEmpty && title != '<unknown>' ? title : 'Unknown Title';
+
   String get displayArtist =>
       artist.isNotEmpty && artist != '<unknown>' ? artist : 'Unknown Artist';
+
   String get displayAlbum =>
       album.isNotEmpty && album != '<unknown>' ? album : 'Unknown Album';
 

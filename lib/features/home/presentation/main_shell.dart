@@ -1,16 +1,16 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
-import 'package:melora_music/features/home/presentation/home_screen.dart';
-import 'package:melora_music/features/offline/presentation/offline_screen.dart';
-import 'package:melora_music/features/player/presentation/mini_player.dart';
-import 'package:melora_music/features/profile/presentation/profile_screen.dart';
-import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_dimens.dart';
-import '../../../../core/extensions/context_extensions.dart';
-import '../../../../shared/providers/app_providers.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/app_dimens.dart';
+import '../../../core/extensions/context_extensions.dart';
+import '../../../shared/providers/app_providers.dart';
+import '../../offline/presentation/offline_screen.dart';
+import '../../settings/presentation/settings_screen.dart';
+import '../../player/presentation/mini_player.dart';
 
 class MainShell extends ConsumerWidget {
   const MainShell({super.key});
@@ -19,8 +19,9 @@ class MainShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentIndex = ref.watch(mainTabIndexProvider);
     final currentSong = ref.watch(currentSongProvider);
+    final hasSong = currentSong.valueOrNull != null;
 
-    const screens = [HomeScreen(), OfflineScreen(), ProfileScreen()];
+    final screens = const [OfflineScreen(), SettingsScreen()];
 
     return Scaffold(
       body: Stack(
@@ -28,7 +29,7 @@ class MainShell extends ConsumerWidget {
           // Screen content
           IndexedStack(index: currentIndex, children: screens),
 
-          // Mini Player + Bottom Nav
+          // Mini Player + Bottom Nav (always at bottom)
           Positioned(
             bottom: 0,
             left: 0,
@@ -37,16 +38,17 @@ class MainShell extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 // Mini Player
-                if (currentSong.valueOrNull != null)
+                if (hasSong)
                   const MiniPlayer()
                       .animate()
                       .fadeIn(duration: 300.ms)
-                      .slideY(begin: 0.5, end: 0),
+                      .slideY(begin: 0.3, end: 0),
 
-                // Bottom Navigation with glass effect
+                // Bottom Navigation
                 _GlassBottomNav(
                   currentIndex: currentIndex,
                   onTap: (index) {
+                    HapticFeedback.lightImpact();
                     ref.read(mainTabIndexProvider.notifier).state = index;
                   },
                 ),
@@ -75,12 +77,12 @@ class _GlassBottomNav extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             color: isDark
-                ? MeloraColors.darkBg.withOpacity(0.85)
-                : MeloraColors.lightBg.withOpacity(0.85),
+                ? MeloraColors.darkBg.withAlpha(217)
+                : MeloraColors.lightBg.withAlpha(217),
             border: Border(
               top: BorderSide(
                 color: isDark
-                    ? MeloraColors.darkBorder.withOpacity(0.5)
+                    ? MeloraColors.darkBorder.withAlpha(128)
                     : MeloraColors.lightBorder,
                 width: 0.5,
               ),
@@ -91,28 +93,21 @@ class _GlassBottomNav extends StatelessWidget {
             child: SizedBox(
               height: MeloraDimens.tabBarHeight,
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _NavItem(
-                    icon: Iconsax.home_2,
-                    activeIcon: Iconsax.home,
-                    label: 'Home',
+                    icon: Iconsax.music_library_2_copy,
+                    activeIcon: Iconsax.music_library_2,
+                    label: 'Library',
                     isActive: currentIndex == 0,
                     onTap: () => onTap(0),
                   ),
                   _NavItem(
-                    icon: Iconsax.folder_2,
-                    activeIcon: Iconsax.folder,
-                    label: 'Offline',
+                    icon: Iconsax.setting_2,
+                    activeIcon: Iconsax.setting,
+                    label: 'Settings',
                     isActive: currentIndex == 1,
                     onTap: () => onTap(1),
-                  ),
-                  _NavItem(
-                    icon: Iconsax.profile_circle,
-                    activeIcon: Iconsax.profile_circle,
-                    label: 'Profile',
-                    isActive: currentIndex == 2,
-                    onTap: () => onTap(2),
                   ),
                 ],
               ),
@@ -145,23 +140,22 @@ class _NavItem extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: SizedBox(
-        width: 70,
+        width: 100,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(MeloraDimens.radiusFull),
-                color: isActive
-                    ? MeloraColors.primary.withOpacity(0.15)
-                    : Colors.transparent,
+                gradient: isActive ? MeloraColors.primaryGradient : null,
+                color: isActive ? null : Colors.transparent,
               ),
               child: Icon(
                 isActive ? activeIcon : icon,
                 size: 24,
-                color: isActive ? MeloraColors.primary : context.textTertiary,
+                color: isActive ? Colors.white : context.textTertiary,
               ),
             ),
             const SizedBox(height: 4),

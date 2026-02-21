@@ -67,11 +67,18 @@ class MeloraColors {
     colors: [Color(0xFF1A1A2E), Color(0xFF252540), Color(0xFF1A1A2E)],
   );
 
-  // ─── Glass Colors ──────────────────────────────────────
-  static Color glassWhite = Colors.white.withOpacity(0.08);
-  static Color glassBorder = Colors.white.withOpacity(0.12);
-  static Color glassHighlight = Colors.white.withOpacity(0.15);
+  // ─── Glass Colors (using withAlpha) ────────────────────
+  static Color glassWhite = Colors.white.withAlpha(20); // 0.08 * 255
+  static Color glassBorder = Colors.white.withAlpha(31); // 0.12 * 255
+  static Color glassHighlight = Colors.white.withAlpha(38); // 0.15 * 255
+  static Color glassBlack = Colors.black.withAlpha(77); // 0.3 * 255
+  static Color glassBorderDark = Colors.black.withAlpha(38); // 0.15 * 255
+}
 
-  static Color glassBlack = Colors.black.withOpacity(0.3);
-  static Color glassBorderDark = Colors.black.withOpacity(0.15);
+/// Extension for easier alpha conversion
+extension ColorAlpha on Color {
+  /// Convert opacity (0.0-1.0) to alpha (0-255)
+  Color withOpacityValue(double opacity) {
+    return withAlpha((opacity * 255).round().clamp(0, 255));
+  }
 }

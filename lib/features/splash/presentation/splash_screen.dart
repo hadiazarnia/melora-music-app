@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../shared/providers/app_providers.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -22,11 +23,14 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     )..repeat(reverse: true);
-    _navigate();
+    _initialize();
   }
 
-  Future<void> _navigate() async {
-    await Future.delayed(const Duration(milliseconds: 2500));
+  Future<void> _initialize() async {
+    // Pre-load music library in background
+    ref.read(allSongsProvider);
+
+    await Future.delayed(const Duration(milliseconds: 2000));
     if (!mounted) return;
 
     final prefs = await SharedPreferences.getInstance();
@@ -62,7 +66,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       colors: [
-                        MeloraColors.primary.withOpacity(0.15),
+                        MeloraColors.primary.withAlpha(38),
                         Colors.transparent,
                       ],
                     ),
@@ -72,6 +76,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
               .animate()
               .fadeIn(duration: 800.ms)
               .scale(begin: const Offset(0.5, 0.5)),
+
           Positioned(
                 bottom: -80,
                 right: -80,
@@ -82,7 +87,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       colors: [
-                        MeloraColors.secondary.withOpacity(0.12),
+                        MeloraColors.secondary.withAlpha(31),
                         Colors.transparent,
                       ],
                     ),
@@ -98,7 +103,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Logo
+                // Logo with pulse effect
                 AnimatedBuilder(
                       animation: _pulseController,
                       builder: (context, child) {
@@ -110,8 +115,8 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             gradient: MeloraColors.primaryGradient,
                             boxShadow: [
                               BoxShadow(
-                                color: MeloraColors.primary.withOpacity(
-                                  0.3 + _pulseController.value * 0.2,
+                                color: MeloraColors.primary.withAlpha(
+                                  (77 + _pulseController.value * 51).round(),
                                 ),
                                 blurRadius: 30 + _pulseController.value * 15,
                                 spreadRadius: _pulseController.value * 5,
@@ -134,6 +139,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                       curve: Curves.elasticOut,
                       duration: 1000.ms,
                     ),
+
                 const SizedBox(height: 24),
 
                 // App name
@@ -154,7 +160,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 const SizedBox(height: 8),
 
                 // Tagline
-                Text(
+                const Text(
                       'Feel the Music',
                       style: TextStyle(
                         fontFamily: 'Outfit',
@@ -182,7 +188,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 height: 24,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: MeloraColors.primary.withOpacity(0.6),
+                  color: MeloraColors.primary.withAlpha(153),
                 ),
               ),
             ),

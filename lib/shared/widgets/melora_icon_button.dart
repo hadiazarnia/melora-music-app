@@ -1,5 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimens.dart';
 
@@ -62,7 +63,12 @@ class MeloraIconButton extends StatelessWidget {
             ),
           ),
           child: IconButton(
-            onPressed: onPressed,
+            onPressed: onPressed != null
+                ? () {
+                    HapticFeedback.lightImpact();
+                    onPressed!();
+                  }
+                : null,
             icon: Icon(icon, size: iconSize, color: iconColor),
             padding: EdgeInsets.zero,
           ),
@@ -78,15 +84,20 @@ class MeloraIconButton extends StatelessWidget {
               width: size,
               height: size,
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
+                color: Colors.white.withAlpha(20),
                 borderRadius: BorderRadius.circular(MeloraDimens.radiusMd),
                 border: Border.all(
-                  color: Colors.white.withOpacity(0.12),
+                  color: Colors.white.withAlpha(31),
                   width: 0.5,
                 ),
               ),
               child: IconButton(
-                onPressed: onPressed,
+                onPressed: onPressed != null
+                    ? () {
+                        HapticFeedback.lightImpact();
+                        onPressed!();
+                      }
+                    : null,
                 icon: Icon(icon, size: iconSize, color: iconColor),
                 padding: EdgeInsets.zero,
               ),
@@ -101,7 +112,12 @@ class MeloraIconButton extends StatelessWidget {
           width: size,
           height: size,
           child: IconButton(
-            onPressed: onPressed,
+            onPressed: onPressed != null
+                ? () {
+                    HapticFeedback.lightImpact();
+                    onPressed!();
+                  }
+                : null,
             icon: Icon(icon, size: iconSize, color: iconColor),
             padding: EdgeInsets.zero,
           ),

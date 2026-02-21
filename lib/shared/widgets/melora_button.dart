@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter/services.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimens.dart';
 
@@ -110,7 +110,7 @@ class MeloraButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(radius),
             boxShadow: [
               BoxShadow(
-                color: MeloraColors.primary.withOpacity(0.3),
+                color: MeloraColors.primary.withAlpha(77),
                 blurRadius: 12,
                 offset: const Offset(0, 4),
               ),
@@ -119,7 +119,12 @@ class MeloraButton extends StatelessWidget {
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: isLoading ? null : onPressed,
+              onTap: isLoading
+                  ? null
+                  : () {
+                      HapticFeedback.lightImpact();
+                      onPressed?.call();
+                    },
               borderRadius: BorderRadius.circular(radius),
               child: Center(child: buttonChild),
             ),
@@ -134,7 +139,12 @@ class MeloraButton extends StatelessWidget {
           width: isFullWidth ? double.infinity : null,
           height: _height,
           child: ElevatedButton(
-            onPressed: isLoading ? null : onPressed,
+            onPressed: isLoading
+                ? null
+                : () {
+                    HapticFeedback.lightImpact();
+                    onPressed?.call();
+                  },
             style: ElevatedButton.styleFrom(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(radius),
@@ -150,9 +160,14 @@ class MeloraButton extends StatelessWidget {
           width: isFullWidth ? double.infinity : null,
           height: _height,
           child: ElevatedButton(
-            onPressed: isLoading ? null : onPressed,
+            onPressed: isLoading
+                ? null
+                : () {
+                    HapticFeedback.lightImpact();
+                    onPressed?.call();
+                  },
             style: ElevatedButton.styleFrom(
-              backgroundColor: MeloraColors.primary.withOpacity(0.15),
+              backgroundColor: MeloraColors.primary.withAlpha(38),
               foregroundColor: MeloraColors.primary,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(radius),
@@ -168,7 +183,12 @@ class MeloraButton extends StatelessWidget {
           width: isFullWidth ? double.infinity : null,
           height: _height,
           child: OutlinedButton(
-            onPressed: isLoading ? null : onPressed,
+            onPressed: isLoading
+                ? null
+                : () {
+                    HapticFeedback.lightImpact();
+                    onPressed?.call();
+                  },
             style: OutlinedButton.styleFrom(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(radius),
@@ -183,7 +203,12 @@ class MeloraButton extends StatelessWidget {
           width: isFullWidth ? double.infinity : null,
           height: _height,
           child: TextButton(
-            onPressed: isLoading ? null : onPressed,
+            onPressed: isLoading
+                ? null
+                : () {
+                    HapticFeedback.lightImpact();
+                    onPressed?.call();
+                  },
             child: buttonChild,
           ),
         );

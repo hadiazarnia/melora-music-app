@@ -17,6 +17,16 @@ extension DurationX on Duration {
     }
     return formatted;
   }
+
+  /// Format as human readable (e.g., "3 min", "1 hr 30 min")
+  String get humanReadable {
+    if (inHours > 0) {
+      final hours = inHours;
+      final minutes = inMinutes.remainder(60);
+      return minutes > 0 ? '$hours hr $minutes min' : '$hours hr';
+    }
+    return '${inMinutes} min';
+  }
 }
 
 /// int to file size string

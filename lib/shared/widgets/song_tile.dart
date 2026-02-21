@@ -1,61 +1,112 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimens.dart';
 import '../../core/extensions/context_extensions.dart';
 import '../../core/extensions/duration_extensions.dart';
 import '../models/song_model.dart';
+import '../providers/app_providers.dart';
+import 'album_art_widget.dart';
 
-/// Melora Design System - Song Tile Component
-class SongTile extends StatelessWidget {
+class SongTile extends ConsumerWidget {
   final SongModel song;
-  final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
-  final bool isPlaying;
-  final bool showCover;
-  final bool showDuration;
-  final bool showSize;
   final int index;
+  final bool showIndex;
+  final bool showSize;
+  final bool showDuration;
+  final VoidCallback? onTap;
+  final VoidCallback? onOptionsTap;
 
   const SongTile({
     super.key,
     required this.song,
-    this.onTap,
-    this.onLongPress,
-    this.isPlaying = false,
-    this.showCover = true,
-    this.showDuration = true,
+    required this.index,
+    this.showIndex = false,
     this.showSize = false,
-    this.index = 0,
+    this.showDuration = true,
+    this.onTap,
+    this.onOptionsTap,
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentSong = ref.watch(currentSongProvider).valueOrNull;
+    final isPlaying = currentSong?.id == song.id;
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
-        onLongPress: onLongPress,
-        borderRadius: BorderRadius.circular(MeloraDimens.radiusMd),
-        child: Padding(
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap?.call();
+        },
+        onLongPress: () {
+          HapticFeedback.mediumImpact();
+          onOptionsTap?.call();
+        },
+        child: Container(
           padding: const EdgeInsets.symmetric(
             horizontal: MeloraDimens.pagePadding,
             vertical: MeloraDimens.sm,
           ),
+          decoration: isPlaying
+              ? BoxDecoration(
+                  color: MeloraColors.primary.withAlpha(20),
+                  border: const Border(
+                    left: BorderSide(color: MeloraColors.primary, width: 3),
+                  ),
+                )
+              : null,
           child: Row(
             children: [
-              // Cover Art
-              if (showCover) ...[
-                _CoverArt(albumArt: song.albumArt, isPlaying: isPlaying),
-                const SizedBox(width: MeloraDimens.md),
-              ],
+              // Index or Album Art
+              if (showIndex)
+                SizedBox(
+                  width: 36,
+                  child: Center(
+                    child: isPlaying
+                        ? const _PlayingIndicator()
+                        : Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              fontFamily: 'Outfit',
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: context.textTertiary,
+                            ),
+                          ),
+                  ),
+                )
+              else
+                Stack(
+                  children: [
+                    AlbumArtWidget(
+                      songId: song.id,
+                      size: MeloraDimens.coverSm,
+                      borderRadius: MeloraDimens.radiusSm,
+                    ),
+                    if (isPlaying)
+                      Container(
+                        width: MeloraDimens.coverSm,
+                        height: MeloraDimens.coverSm,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(
+                            MeloraDimens.radiusSm,
+                          ),
+                          color: Colors.black.withAlpha(153),
+                        ),
+                        child: const Center(child: _PlayingIndicator()),
+                      ),
+                  ],
+                ),
+              const SizedBox(width: MeloraDimens.md),
 
               // Song Info
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       song.displayTitle,
@@ -72,12 +123,20 @@ class SongTile extends StatelessWidget {
                             : context.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Row(
                       children: [
-                        Flexible(
+                        if (song.isFavorite) ...[
+                          const Icon(
+                            Icons.favorite,
+                            size: 12,
+                            color: MeloraColors.secondary,
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        Expanded(
                           child: Text(
-                            song.displayArtist,
+                            _buildSubtitle(),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
@@ -87,26 +146,6 @@ class SongTile extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (showDuration) ...[
-                          Text(
-                            ' · ${song.duration.formatted}',
-                            style: TextStyle(
-                              fontFamily: 'Outfit',
-                              fontSize: 12,
-                              color: context.textTertiary,
-                            ),
-                          ),
-                        ],
-                        if (showSize && song.size != null) ...[
-                          Text(
-                            ' · ${song.size!.fileSize}',
-                            style: TextStyle(
-                              fontFamily: 'Outfit',
-                              fontSize: 12,
-                              color: context.textTertiary,
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ],
@@ -114,80 +153,79 @@ class SongTile extends StatelessWidget {
               ),
 
               // More button
-              SizedBox(
-                width: 36,
-                height: 36,
-                child: IconButton(
-                  onPressed: onLongPress,
-                  icon: Icon(
-                    Iconsax.more,
-                    size: 20,
-                    color: context.textTertiary,
-                  ),
-                  padding: EdgeInsets.zero,
-                ),
+              IconButton(
+                onPressed: onOptionsTap,
+                icon: Icon(Iconsax.more, size: 20, color: context.textTertiary),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
               ),
             ],
           ),
         ),
       ),
-    ).animate().fadeIn(
-      delay: Duration(milliseconds: 30 * index),
-      duration: 300.ms,
     );
+  }
+
+  String _buildSubtitle() {
+    final parts = <String>[song.displayArtist];
+    if (showDuration) {
+      parts.add(song.duration.formatted);
+    }
+    if (showSize && song.size != null) {
+      parts.add(song.size!.fileSize);
+    }
+    return parts.join(' • ');
   }
 }
 
-class _CoverArt extends StatelessWidget {
-  final String? albumArt;
-  final bool isPlaying;
+class _PlayingIndicator extends StatefulWidget {
+  const _PlayingIndicator();
 
-  const _CoverArt({this.albumArt, this.isPlaying = false});
+  @override
+  State<_PlayingIndicator> createState() => _PlayingIndicatorState();
+}
+
+class _PlayingIndicatorState extends State<_PlayingIndicator>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: MeloraDimens.coverSm,
-      height: MeloraDimens.coverSm,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(MeloraDimens.radiusSm),
-        color: context.isDark
-            ? MeloraColors.darkSurfaceLight
-            : MeloraColors.lightSurfaceLight,
-        border: isPlaying
-            ? Border.all(color: MeloraColors.primary, width: 1.5)
-            : null,
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(MeloraDimens.radiusSm),
-        child: albumArt != null
-            ? Image.network(
-                albumArt!,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _placeholder(context),
-              )
-            : _placeholder(context),
-      ),
-    );
-  }
-
-  Widget _placeholder(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            MeloraColors.primary.withOpacity(0.3),
-            MeloraColors.secondary.withOpacity(0.3),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Icon(
-        Iconsax.music,
-        size: 20,
-        color: isPlaying ? MeloraColors.primary : context.textTertiary,
-      ),
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (i) {
+            final delay = i * 0.2;
+            final value = (((_controller.value + delay) % 1.0) * 2 - 1).abs();
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 1),
+              width: 3,
+              height: 8 + (value * 8),
+              decoration: BoxDecoration(
+                color: MeloraColors.primary,
+                borderRadius: BorderRadius.circular(1.5),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }

@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:on_audio_query/on_audio_query.dart' as oaq;
 import 'package:path/path.dart' as p;
 import '../../shared/models/song_model.dart';
@@ -7,35 +8,59 @@ class MusicScannerService {
   final oaq.OnAudioQuery _audioQuery = oaq.OnAudioQuery();
 
   Future<bool> requestPermission() async {
+    // On iOS, permission is handled differently
+    if (Platform.isIOS) {
+      return true; // iOS uses Media Library access
+    }
     return await _audioQuery.permissionsRequest();
   }
 
+  Future<bool> checkPermission() async {
+    if (Platform.isIOS) return true;
+    return await _audioQuery.permissionsStatus();
+  }
+
   Future<List<SongModel>> getAllSongs() async {
-    final songs = await _audioQuery.querySongs(
-      sortType: oaq.SongSortType.DATE_ADDED,
-      orderType: oaq.OrderType.DESC_OR_GREATER,
-      uriType: oaq.UriType.EXTERNAL,
-      ignoreCase: true,
-    );
-    return songs.map(_convertSong).toList();
+    try {
+      final songs = await _audioQuery.querySongs(
+        sortType: oaq.SongSortType.DATE_ADDED,
+        orderType: oaq.OrderType.DESC_OR_GREATER,
+        uriType: oaq.UriType.EXTERNAL,
+        ignoreCase: true,
+      );
+
+      return songs
+          .where(
+            (s) => s.duration != null && s.duration! > 10000,
+          ) // Filter very short audio (>10s)
+          .where((s) => !s.data.contains('WhatsApp')) // Filter WhatsApp audio
+          .where((s) => !s.data.contains('Telegram')) // Filter Telegram audio
+          .where(
+            (s) => !s.data.contains('notification'),
+          ) // Filter notification sounds
+          .where((s) => !s.data.contains('ringtone')) // Filter ringtones
+          .map(_convertSong)
+          .toList();
+    } catch (e) {
+      return [];
+    }
   }
 
   Future<List<SongModel>> getSongsFromFolder(String folderPath) async {
     final allSongs = await getAllSongs();
-    return allSongs
-        .where((s) => s.path != null && p.dirname(s.path!) == folderPath)
-        .toList();
+    return allSongs.where((s) => s.folder == folderPath).toList();
   }
 
   Future<List<FolderModel>> getFolders() async {
     final allSongs = await getAllSongs();
     final folderMap = <String, int>{};
+
     for (final song in allSongs) {
-      if (song.path != null) {
-        final folder = p.dirname(song.path!);
-        folderMap[folder] = (folderMap[folder] ?? 0) + 1;
+      if (song.folder != null && song.folder!.isNotEmpty) {
+        folderMap[song.folder!] = (folderMap[song.folder!] ?? 0) + 1;
       }
     }
+
     return folderMap.entries
         .map(
           (e) => FolderModel(
@@ -48,35 +73,14 @@ class MusicScannerService {
       ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
   }
 
-  Future<List<AlbumModel>> getAlbums() async {
-    final albums = await _audioQuery.queryAlbums(
-      sortType: oaq.AlbumSortType.ALBUM,
-      orderType: oaq.OrderType.ASC_OR_SMALLER,
-    );
-    return albums
-        .map(
-          (a) => AlbumModel(
-            id: a.id,
-            name: a.album,
-            artist: a.artist ?? 'Unknown',
-            songCount: a.numOfSongs,
-          ),
-        )
-        .toList();
-  }
+  Future<List<SongModel>> searchSongs(
+    String query,
+    List<SongModel> songs,
+  ) async {
+    if (query.isEmpty) return songs;
 
-  Future<List<SongModel>> getSongsByAlbum(int albumId) async {
-    final songs = await _audioQuery.queryAudiosFrom(
-      oaq.AudiosFromType.ALBUM_ID,
-      albumId,
-    );
-    return songs.map(_convertSong).toList();
-  }
-
-  Future<List<SongModel>> searchSongs(String query) async {
-    final allSongs = await getAllSongs();
     final q = query.toLowerCase();
-    return allSongs
+    return songs
         .where(
           (s) =>
               s.title.toLowerCase().contains(q) ||
@@ -86,12 +90,10 @@ class MusicScannerService {
         .toList();
   }
 
-  // ✅ FIX: ذخیره صحیح uri و path
   SongModel _convertSong(oaq.SongModel song) {
-    // song.data = مسیر واقعی فایل: /storage/emulated/0/Music/song.mp3
-    // song.uri  = content URI: content://media/external/audio/media/123
     final filePath = song.data;
     final contentUri = song.uri;
+    final folder = p.dirname(filePath);
 
     return SongModel(
       id: song.id,
@@ -99,12 +101,10 @@ class MusicScannerService {
       artist: song.artist ?? 'Unknown Artist',
       album: song.album ?? 'Unknown Album',
       duration: Duration(milliseconds: song.duration ?? 0),
-      // ✅ uri: ترجیحاً content URI برای fallback
       uri: contentUri ?? filePath,
-      // ✅ path: مسیر واقعی فایل برای پخش
       path: filePath,
       size: song.size,
-      folder: p.dirname(filePath),
+      folder: folder,
       isOnline: false,
     );
   }

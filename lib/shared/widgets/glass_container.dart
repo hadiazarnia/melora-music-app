@@ -4,7 +4,6 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimens.dart';
 
 /// Melora Design System - Glass Container (Glassmorphism)
-/// A frosted glass card with blur effect
 class GlassContainer extends StatelessWidget {
   final Widget child;
   final double? width;
@@ -16,7 +15,7 @@ class GlassContainer extends StatelessWidget {
   final EdgeInsets? padding;
   final EdgeInsets? margin;
   final VoidCallback? onTap;
-  final double opacity;
+  final int opacityAlpha;
 
   const GlassContainer({
     super.key,
@@ -30,7 +29,7 @@ class GlassContainer extends StatelessWidget {
     this.padding,
     this.margin,
     this.onTap,
-    this.opacity = 0.08,
+    this.opacityAlpha = 20, // ~0.08
   });
 
   @override
@@ -53,8 +52,8 @@ class GlassContainer extends StatelessWidget {
                 color:
                     backgroundColor ??
                     (isDark
-                        ? Colors.white.withOpacity(opacity)
-                        : Colors.white.withOpacity(0.6)),
+                        ? Colors.white.withAlpha(opacityAlpha)
+                        : Colors.white.withAlpha(153)),
                 borderRadius: BorderRadius.circular(borderRadius),
                 border: Border.all(
                   color:
