@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,18 +8,17 @@ import 'core/services/audio_player_service.dart';
 import 'core/services/favorites_service.dart';
 import 'core/services/music_cache_service.dart';
 import 'core/services/equalizer_service.dart';
+import 'core/services/file_import_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'routes/app_router.dart';
 import 'shared/providers/app_providers.dart';
 
-// Global navigator key for notification tap handling
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // System UI setup
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -30,11 +30,9 @@ Future<void> main() async {
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  // Initialize Hive
   await Hive.initFlutter();
   await Hive.openBox('melora_settings');
 
-  // Initialize services
   final favoritesService = FavoritesService();
   await favoritesService.init();
 
@@ -44,7 +42,6 @@ Future<void> main() async {
   final equalizerService = EqualizerService();
   await equalizerService.init();
 
-  // Initialize audio handler with notification tap callback
   final audioHandler = await AudioService.init(
     builder: () => MeloraAudioHandler(),
     config: const AudioServiceConfig(
@@ -57,6 +54,9 @@ Future<void> main() async {
       notificationColor: Color(0xFF6C5CE7),
     ),
   );
+
+  // Initialize file import (Open In / Share)
+  await FileImportService.init();
 
   runApp(
     ProviderScope(
@@ -84,6 +84,44 @@ class _MeloraAppState extends ConsumerState<MeloraApp>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _setupFileImport();
+  }
+
+  void _setupFileImport() {
+    FileImportService.setOnFileImported((filePath) async {
+      try {
+        final file = File(filePath);
+        if (!await file.exists()) return;
+
+        final song = await FileImportService.fileToSongModel(file);
+
+        // Clear cache so new file shows in library
+        final cacheService = ref.read(musicCacheServiceProvider);
+        await cacheService.clearCache();
+
+        // Play the imported song
+        ref.read(audioHandlerProvider).playSong(song);
+
+        // Refresh library
+        ref.read(musicRefreshProvider.notifier).state++;
+
+        // Show notification
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Playing: ${song.displayTitle}'),
+              behavior: SnackBarBehavior.floating,
+              backgroundColor: const Color(0xFF6C5CE7),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('Import error: $e');
+      }
+    });
   }
 
   @override
@@ -94,9 +132,8 @@ class _MeloraAppState extends ConsumerState<MeloraApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Handle app lifecycle changes
     if (state == AppLifecycleState.resumed) {
-      // App came to foreground - could check for new music files here
+      // Refresh when coming back to app (in case new files were added)
     }
   }
 

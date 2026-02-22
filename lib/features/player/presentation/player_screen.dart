@@ -11,7 +11,6 @@ import '../../../core/extensions/context_extensions.dart';
 import '../../../core/extensions/duration_extensions.dart';
 import '../../../shared/providers/app_providers.dart';
 import '../../../shared/widgets/album_art_widget.dart';
-import '../../../shared/widgets/audio_wave_animation.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   const PlayerScreen({super.key});
@@ -251,16 +250,6 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen>
                     onSleepTimer: () => _showSleepTimerSheet(context, ref),
                     onSpeed: () => _showSpeedSheet(context, ref),
                   ).animate().fadeIn(delay: 500.ms, duration: 400.ms),
-
-                  const SizedBox(height: MeloraDimens.md),
-
-                  // ─── Audio Wave ─────────────────────────
-                  AudioWaveAnimation(
-                    isPlaying: isPlaying,
-                    audioLevel: audioLevel,
-                    color: MeloraColors.primary.withAlpha(77),
-                    height: 35,
-                  ).animate().fadeIn(delay: 600.ms, duration: 400.ms),
 
                   const SizedBox(height: MeloraDimens.md),
                 ],

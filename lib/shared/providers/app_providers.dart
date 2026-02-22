@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:melora_music/core/services/file_import_service.dart';
 import 'package:rxdart/rxdart.dart';
 import '../../core/services/audio_player_service.dart';
 import '../../core/services/music_scanner_service.dart';
@@ -279,3 +280,16 @@ class SleepTimerNotifier extends StateNotifier<Duration?> {
     super.dispose();
   }
 }
+
+final importedSongsProvider = FutureProvider<List<SongModel>>((ref) async {
+  ref.watch(musicRefreshProvider);
+
+  final files = await FileImportService.getImportedFiles();
+  final songs = <SongModel>[];
+
+  for (final file in files) {
+    songs.add(await FileImportService.fileToSongModel(file));
+  }
+
+  return songs;
+});

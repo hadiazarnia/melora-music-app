@@ -7,7 +7,6 @@ import '../../../core/constants/app_dimens.dart';
 import '../../../core/extensions/context_extensions.dart';
 import '../../../shared/widgets/melora_search_bar.dart';
 import '../../../shared/widgets/section_header.dart';
-import '../../../shared/widgets/glass_container.dart';
 import '../../../shared/widgets/melora_icon_button.dart';
 
 class HomeScreen extends ConsumerWidget {
