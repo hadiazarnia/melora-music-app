@@ -15,11 +15,15 @@ import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'routes/app_router.dart';
 import 'shared/providers/app_providers.dart';
+import 'core/services/audio_metadata_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize metadata service
+  await AudioMetadataService.init();
 
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(

@@ -1,21 +1,21 @@
+// lib/core/services/music_scanner_service.dart
 import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:on_audio_query/on_audio_query.dart' as oaq;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../../shared/models/song_model.dart';
 import '../../shared/models/folder_model.dart';
+import 'audio_metadata_service.dart';
 
 class MusicScannerService {
   final oaq.OnAudioQuery _audioQuery = oaq.OnAudioQuery();
+  final AudioPlayer _durationPlayer = AudioPlayer();
 
   Future<bool> requestPermission() async {
     if (Platform.isIOS) {
-      // On iOS, try to request but don't block if denied
-      try {
-        return await _audioQuery.permissionsRequest();
-      } catch (e) {
-        return true; // Continue anyway, we'll scan imported files
-      }
+      return true;
     }
     return await _audioQuery.permissionsRequest();
   }
@@ -28,30 +28,35 @@ class MusicScannerService {
   Future<List<SongModel>> getAllSongs() async {
     final List<SongModel> allSongs = [];
 
-    // 1. Try on_audio_query (works on Android, limited on iOS)
-    try {
-      final songs = await _audioQuery.querySongs(
-        sortType: oaq.SongSortType.DATE_ADDED,
-        orderType: oaq.OrderType.DESC_OR_GREATER,
-        uriType: oaq.UriType.EXTERNAL,
-        ignoreCase: true,
-      );
+    // Initialize metadata service
+    await AudioMetadataService.init();
 
-      allSongs.addAll(
-        songs
-            .where((s) => s.duration != null && s.duration! > 10000)
-            .where((s) => !_isSystemAudio(s.data))
-            .map(_convertSong),
-      );
-    } catch (e) {
-      debugLog('on_audio_query error: $e');
+    // 1. Android: Use on_audio_query
+    if (Platform.isAndroid) {
+      try {
+        final songs = await _audioQuery.querySongs(
+          sortType: oaq.SongSortType.DATE_ADDED,
+          orderType: oaq.OrderType.DESC_OR_GREATER,
+          uriType: oaq.UriType.EXTERNAL,
+          ignoreCase: true,
+        );
+
+        allSongs.addAll(
+          songs
+              .where((s) => s.duration != null && s.duration! > 10000)
+              .where((s) => !_isSystemAudio(s.data))
+              .map(_convertSong),
+        );
+      } catch (e) {
+        debugPrint('on_audio_query error: $e');
+      }
     }
 
-    // 2. Scan imported files directory (works on both iOS and Android)
+    // 2. Scan imported_audio directory (iOS & Android)
     try {
-      final importedSongs = await _scanImportedFiles();
+      final importedSongs = await _scanImportedDirectory();
+      debugPrint('Found ${importedSongs.length} imported songs');
 
-      // Avoid duplicates by checking paths
       final existingPaths = allSongs.map((s) => s.path).toSet();
       for (final song in importedSongs) {
         if (!existingPaths.contains(song.path)) {
@@ -59,13 +64,15 @@ class MusicScannerService {
         }
       }
     } catch (e) {
-      debugLog('Import scan error: $e');
+      debugPrint('Import scan error: $e');
     }
 
-    // 3. On iOS, also scan Documents directory
+    // 3. iOS: Also scan Documents directory
     if (Platform.isIOS) {
       try {
         final docSongs = await _scanDocumentsDirectory();
+        debugPrint('Found ${docSongs.length} document songs');
+
         final existingPaths = allSongs.map((s) => s.path).toSet();
         for (final song in docSongs) {
           if (!existingPaths.contains(song.path)) {
@@ -73,77 +80,112 @@ class MusicScannerService {
           }
         }
       } catch (e) {
-        debugLog('Documents scan error: $e');
+        debugPrint('Documents scan error: $e');
       }
     }
 
+    debugPrint('Total songs found: ${allSongs.length}');
     return allSongs;
   }
 
-  /// Scan the imported_audio directory
-  Future<List<SongModel>> _scanImportedFiles() async {
+  /// Scan the imported_audio directory with full metadata extraction
+  Future<List<SongModel>> _scanImportedDirectory() async {
     final appDir = await getApplicationDocumentsDirectory();
     final importDir = Directory(p.join(appDir.path, 'imported_audio'));
 
-    if (!await importDir.exists()) return [];
+    if (!await importDir.exists()) {
+      debugPrint('Import directory does not exist: ${importDir.path}');
+      return [];
+    }
 
     final songs = <SongModel>[];
-    int idCounter = 900000; // High ID to avoid conflicts
+    int idCounter = 900000;
 
-    await for (final entity in importDir.list(recursive: true)) {
-      if (entity is File && _isAudioFile(entity.path)) {
-        final stat = await entity.stat();
-        final name = p.basenameWithoutExtension(entity.path);
-
-        songs.add(
-          SongModel(
-            id: idCounter++,
-            title: _cleanTitle(name),
-            artist: 'Unknown Artist',
-            album: 'Imported',
-            duration: Duration.zero,
-            uri: entity.path,
-            path: entity.path,
-            size: stat.size,
-            folder: p.dirname(entity.path),
-            isOnline: false,
-          ),
-        );
+    try {
+      await for (final entity in importDir.list(recursive: false)) {
+        if (entity is File && _isAudioFile(entity.path)) {
+          try {
+            final song = await _createSongFromFile(entity, idCounter++);
+            songs.add(song);
+            debugPrint('Found imported: ${song.title} - ${song.artist}');
+          } catch (e) {
+            debugPrint('Error reading file ${entity.path}: $e');
+          }
+        }
       }
+    } catch (e) {
+      debugPrint('Error listing import directory: $e');
     }
 
     return songs;
   }
 
-  /// Scan iOS Documents directory for audio files
+  /// Scan iOS Documents directory
   Future<List<SongModel>> _scanDocumentsDirectory() async {
     final appDir = await getApplicationDocumentsDirectory();
     final songs = <SongModel>[];
     int idCounter = 800000;
 
-    await for (final entity in appDir.list(recursive: false)) {
-      if (entity is File && _isAudioFile(entity.path)) {
-        final stat = await entity.stat();
-        final name = p.basenameWithoutExtension(entity.path);
+    try {
+      await for (final entity in appDir.list(recursive: false)) {
+        if (entity is File && _isAudioFile(entity.path)) {
+          if (entity.path.contains('imported_audio')) continue;
 
-        songs.add(
-          SongModel(
-            id: idCounter++,
-            title: _cleanTitle(name),
-            artist: 'Unknown Artist',
-            album: 'Local Files',
-            duration: Duration.zero,
-            uri: entity.path,
-            path: entity.path,
-            size: stat.size,
-            folder: p.dirname(entity.path),
-            isOnline: false,
-          ),
-        );
+          try {
+            final song = await _createSongFromFile(
+              entity,
+              idCounter++,
+              album: 'Local Files',
+            );
+            songs.add(song);
+          } catch (e) {
+            debugPrint('Error reading doc file: $e');
+          }
+        }
       }
+    } catch (e) {
+      debugPrint('Error listing documents: $e');
     }
 
     return songs;
+  }
+
+  /// Create SongModel from file with full metadata extraction
+  Future<SongModel> _createSongFromFile(
+    File file,
+    int id, {
+    String? album,
+  }) async {
+    final stat = await file.stat();
+
+    // Get metadata using audiotags
+    final metadata = await AudioMetadataService.getMetadata(file.path);
+
+    // Get duration using just_audio if not available from metadata
+    Duration duration = metadata.duration;
+    if (duration == Duration.zero) {
+      try {
+        final dur = await _durationPlayer.setFilePath(file.path);
+        duration = dur ?? Duration.zero;
+        await _durationPlayer.stop();
+      } catch (e) {
+        debugPrint('Could not get duration for ${file.path}: $e');
+      }
+    }
+
+    return SongModel(
+      id: id,
+      title: metadata.title,
+      artist: metadata.artist,
+      album: album ?? metadata.album,
+      duration: duration,
+      uri: file.path,
+      path: file.path,
+      size: stat.size,
+      folder: p.dirname(file.path),
+      albumArt: metadata.artworkPath, // ✅ حالا artwork path داریم
+      isOnline: false,
+    );
   }
 
   Future<List<SongModel>> getSongsFromFolder(String folderPath) async {
@@ -213,15 +255,6 @@ class MusicScannerService {
         lower.contains('alarm');
   }
 
-  String _cleanTitle(String name) {
-    // Remove common prefixes/suffixes
-    return name
-        .replaceAll(RegExp(r'^\d+[\.\-_\s]+'), '') // Remove leading numbers
-        .replaceAll(RegExp(r'_'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-  }
-
   SongModel _convertSong(oaq.SongModel song) {
     final filePath = song.data;
     final contentUri = song.uri;
@@ -241,8 +274,7 @@ class MusicScannerService {
     );
   }
 
-  void debugLog(String msg) {
-    // ignore: avoid_print
-    print('MusicScanner: $msg');
+  void dispose() {
+    _durationPlayer.dispose();
   }
 }

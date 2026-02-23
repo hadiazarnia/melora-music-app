@@ -1,4 +1,6 @@
+// lib/core/services/file_import_service.dart
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -56,27 +58,23 @@ class FileImportService {
     try {
       String cleanPath = sourcePath;
 
-      // Clean up path
       if (cleanPath.startsWith('file://')) {
         cleanPath = Uri.parse(cleanPath).path;
       }
 
-      // Check if file exists at source
       final sourceFile = File(cleanPath);
       if (!await sourceFile.exists()) {
-        print('Melora Import: Source file not found: $cleanPath');
+        debugPrint('Melora Import: Source file not found: $cleanPath');
         return;
       }
 
       if (!_isAudioFile(cleanPath)) {
-        print('Melora Import: Not audio: $cleanPath');
+        debugPrint('Melora Import: Not audio: $cleanPath');
         return;
       }
 
-      // ✅ Always copy to our import directory for persistence
       final savedPath = await _saveToImportDir(sourceFile);
-
-      print('Melora Import: Saved to: $savedPath');
+      debugPrint('Melora Import: Saved to: $savedPath');
 
       if (_onFileImported != null) {
         _onFileImported!(savedPath);
@@ -84,7 +82,7 @@ class FileImportService {
         _pendingFiles.add(savedPath);
       }
     } catch (e) {
-      print('Melora Import Error: $e');
+      debugPrint('Melora Import Error: $e');
     }
   }
 
@@ -93,19 +91,18 @@ class FileImportService {
     final importDir = await getImportDirectory();
     final fileName = p.basename(sourceFile.path);
 
-    // Generate unique filename if needed
     String destPath = p.join(importDir.path, fileName);
     int counter = 1;
+
     while (await File(destPath).exists()) {
-      // Check if it's the same file (same size)
       final existing = File(destPath);
       final existingSize = await existing.length();
       final sourceSize = await sourceFile.length();
+
       if (existingSize == sourceSize) {
-        // Same file, return existing path
-        return destPath;
+        return destPath; // Same file
       }
-      // Different file, add counter
+
       final name = p.basenameWithoutExtension(fileName);
       final ext = p.extension(fileName);
       destPath = p.join(importDir.path, '${name}_$counter$ext');
@@ -153,18 +150,21 @@ class FileImportService {
     return files;
   }
 
+  /// ✅ این متد مهمه - فایل‌های import شده رو به SongModel تبدیل میکنه
   static Future<SongModel> fileToSongModel(File file) async {
     final stat = await file.stat();
     final name = p.basenameWithoutExtension(file.path);
 
-    // Clean up the title
     final cleanName = name
         .replaceAll(RegExp(r'_'), ' ')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
 
+    // Generate unique ID from path
+    final id = file.path.hashCode.abs();
+
     return SongModel(
-      id: file.path.hashCode.abs(),
+      id: id,
       title: cleanName.isNotEmpty ? cleanName : 'Unknown',
       artist: 'Unknown Artist',
       album: 'Imported',
@@ -175,6 +175,52 @@ class FileImportService {
       folder: p.dirname(file.path),
       isOnline: false,
     );
+  }
+
+  /// ✅ Import از FilePicker - این متد جدیده
+  static Future<int> importFromPicker(List<String> filePaths) async {
+    int importedCount = 0;
+    final importDir = await getImportDirectory();
+
+    for (final sourcePath in filePaths) {
+      try {
+        final sourceFile = File(sourcePath);
+        if (!await sourceFile.exists()) continue;
+        if (!_isAudioFile(sourcePath)) continue;
+
+        final fileName = p.basename(sourcePath);
+        String destPath = p.join(importDir.path, fileName);
+
+        // Handle duplicates
+        if (await File(destPath).exists()) {
+          final existing = File(destPath);
+          final existingSize = await existing.length();
+          final sourceSize = await sourceFile.length();
+
+          if (existingSize == sourceSize) {
+            continue; // Same file, skip
+          }
+
+          // Different file, rename
+          int counter = 1;
+          final name = p.basenameWithoutExtension(fileName);
+          final ext = p.extension(fileName);
+
+          while (await File(destPath).exists()) {
+            destPath = p.join(importDir.path, '${name}_$counter$ext');
+            counter++;
+          }
+        }
+
+        await sourceFile.copy(destPath);
+        importedCount++;
+        debugPrint('Melora: Imported $fileName');
+      } catch (e) {
+        debugPrint('Melora: Failed to import $sourcePath: $e');
+      }
+    }
+
+    return importedCount;
   }
 
   static Future<void> deleteImportedFile(String path) async {

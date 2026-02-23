@@ -1,3 +1,4 @@
+// lib/shared/widgets/song_tile.dart
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -5,7 +6,6 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_dimens.dart';
 import '../../core/extensions/context_extensions.dart';
-import '../../core/extensions/duration_extensions.dart';
 import '../models/song_model.dart';
 import '../providers/app_providers.dart';
 import 'album_art_widget.dart';
@@ -16,7 +16,6 @@ class SongTile extends ConsumerWidget {
   final bool showIndex;
   final bool showSize;
   final bool showDuration;
-  final bool showPlayCount;
   final VoidCallback? onTap;
   final VoidCallback? onOptionsTap;
 
@@ -27,10 +26,22 @@ class SongTile extends ConsumerWidget {
     this.showIndex = false,
     this.showSize = false,
     this.showDuration = true,
-    this.showPlayCount = false,
     this.onTap,
     this.onOptionsTap,
   });
+
+  String _formatDuration(Duration duration) {
+    if (duration == Duration.zero) return '--:--';
+    final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$minutes:$seconds';
+  }
+
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -88,6 +99,7 @@ class SongTile extends ConsumerWidget {
                       songId: song.id,
                       size: MeloraDimens.coverSm,
                       borderRadius: MeloraDimens.radiusSm,
+                      artworkPath: song.albumArt,
                     ),
                     if (isPlaying)
                       Container(
@@ -170,14 +182,11 @@ class SongTile extends ConsumerWidget {
 
   String _buildSubtitle() {
     final parts = <String>[song.displayArtist];
-    if (showDuration) {
-      parts.add(song.duration.formatted);
-    }
-    if (showPlayCount && song.playCount > 0) {
-      parts.add('${song.playCount} plays');
+    if (showDuration && song.duration != Duration.zero) {
+      parts.add(_formatDuration(song.duration));
     }
     if (showSize && song.size != null) {
-      parts.add(song.size!.fileSize);
+      parts.add(_formatFileSize(song.size!));
     }
     return parts.join(' • ');
   }

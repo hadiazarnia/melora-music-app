@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../shared/providers/app_providers.dart';
@@ -124,7 +125,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                             ],
                           ),
                           child: const Icon(
-                            Icons.music_note_rounded,
+                            Iconsax.musicnote,
                             size: 48,
                             color: Colors.white,
                           ),

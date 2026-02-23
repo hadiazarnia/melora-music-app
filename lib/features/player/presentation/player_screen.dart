@@ -10,7 +10,6 @@ import 'package:just_audio/just_audio.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
 import '../../../core/extensions/context_extensions.dart';
-import '../../../core/extensions/duration_extensions.dart';
 import '../../../shared/providers/app_providers.dart';
 import '../../../shared/widgets/album_art_widget.dart';
 
@@ -873,7 +872,7 @@ class _WaveSeekBarState extends State<_WaveSeekBar> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                widget.position.formatted,
+                _formatDuration(widget.position),
                 style: TextStyle(
                   fontFamily: 'Outfit',
                   fontSize: 13,
@@ -882,7 +881,7 @@ class _WaveSeekBarState extends State<_WaveSeekBar> {
                 ),
               ),
               Text(
-                widget.duration.formatted,
+                _formatDuration(widget.duration),
                 style: TextStyle(
                   fontFamily: 'Outfit',
                   fontSize: 13,
@@ -1715,4 +1714,10 @@ String _formatDuration(Duration duration) {
     return '$hours:${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
   }
   return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
+}
+
+String _formatFileSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 }

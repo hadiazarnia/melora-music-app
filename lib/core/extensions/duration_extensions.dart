@@ -1,3 +1,4 @@
+// lib/core/extensions/duration_extensions.dart
 /// Duration extensions for formatting music timestamps
 extension DurationX on Duration {
   /// Format as mm:ss

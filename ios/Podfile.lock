@@ -3,6 +3,8 @@ PODS:
     - Flutter
   - audio_session (0.0.1):
     - Flutter
+  - audiotags (1.4.5):
+    - Flutter
   - connectivity_plus (0.0.1):
     - Flutter
     - ReachabilitySwift
@@ -75,6 +77,7 @@ PODS:
 DEPENDENCIES:
   - audio_service (from `.symlinks/plugins/audio_service/ios`)
   - audio_session (from `.symlinks/plugins/audio_session/ios`)
+  - audiotags (from `.symlinks/plugins/audiotags/ios`)
   - connectivity_plus (from `.symlinks/plugins/connectivity_plus/ios`)
   - file_picker (from `.symlinks/plugins/file_picker/ios`)
   - Flutter (from `Flutter`)
@@ -103,6 +106,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/audio_service/ios"
   audio_session:
     :path: ".symlinks/plugins/audio_session/ios"
+  audiotags:
+    :path: ".symlinks/plugins/audiotags/ios"
   connectivity_plus:
     :path: ".symlinks/plugins/connectivity_plus/ios"
   file_picker:
@@ -133,6 +138,7 @@ EXTERNAL SOURCES:
 SPEC CHECKSUMS:
   audio_service: 2023a4a1bdb2fd1443e7b00bdbdb1baa321525db
   audio_session: 9bb7f6c970f21241b19f5a3658097ae459681ba0
+  audiotags: 6e4c3a79c4a7f9d7c9300b5dd3258921f7c9e5f7
   connectivity_plus: 481668c94744c30c53b8895afb39159d1e619bdf
   DKImagePickerController: 946cec48c7873164274ecc4624d19e3da4c1ef3c
   DKPhotoGallery: b3834fecb755ee09a593d7c9e389d8b5d6deed60

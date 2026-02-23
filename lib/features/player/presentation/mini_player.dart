@@ -7,7 +7,6 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
 import '../../../core/extensions/context_extensions.dart';
-import '../../../core/extensions/duration_extensions.dart';
 import '../../../shared/providers/app_providers.dart';
 import '../../../shared/widgets/album_art_widget.dart';
 import 'player_screen.dart';
@@ -298,7 +297,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
                                     ),
                                     const SizedBox(height: 2),
                                     Text(
-                                      '${currentSong.displayArtist} • ${position.formatted}',
+                                      '${currentSong.displayArtist} • ${_formatDuration(position)}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: TextStyle(
@@ -357,6 +356,13 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer>
   }
 }
 
+String _formatDuration(Duration duration) {
+  if (duration == Duration.zero) return '0:00';
+  final minutes = duration.inMinutes.remainder(60);
+  final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
+}
+
 // ═══════════════════════════════════════════════════════════
 //  SEEK PREVIEW OVERLAY
 // ═══════════════════════════════════════════════════════════
@@ -405,7 +411,7 @@ class _SeekPreviewOverlay extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      seekPosition.formatted,
+                      _formatDuration(seekPosition),
                       style: const TextStyle(
                         fontFamily: 'Outfit',
                         fontSize: 18,
@@ -417,7 +423,7 @@ class _SeekPreviewOverlay extends StatelessWidget {
                   const SizedBox(height: 4),
                   // Duration info
                   Text(
-                    '/ ${duration.formatted}',
+                    '/ ${_formatDuration(duration)}',
                     style: TextStyle(
                       fontFamily: 'Outfit',
                       fontSize: 12,

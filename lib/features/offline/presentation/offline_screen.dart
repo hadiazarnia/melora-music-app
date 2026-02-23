@@ -8,7 +8,7 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
 import '../../../core/extensions/context_extensions.dart';
-import '../../../core/extensions/duration_extensions.dart';
+import '../../../core/extensions/duration_extensions.dart'; // ✅ مهم!
 import '../../../core/services/file_import_service.dart';
 import '../../../shared/providers/app_providers.dart';
 import '../../../shared/widgets/melora_search_bar.dart';
@@ -30,7 +30,6 @@ class _OfflineScreenState extends ConsumerState<OfflineScreen>
   final _searchFocusNode = FocusNode();
   String _searchQuery = '';
   String _sortBy = 'date';
-  String _filterBy = 'all'; // all, recent, most_played
   bool _isImporting = false;
 
   @override
@@ -67,107 +66,107 @@ class _OfflineScreenState extends ConsumerState<OfflineScreen>
     );
   }
 
-  void _showFilterMenu() {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => _FilterBottomSheet(
-        currentFilter: _filterBy,
-        onFilterChanged: (filter) {
-          setState(() => _filterBy = filter);
-          Navigator.pop(ctx);
-        },
-      ),
-    );
-  }
-
+  /// ✅ Import از فولدر/فایل‌ها
   Future<void> _importFiles() async {
     if (_isImporting) return;
-
     setState(() => _isImporting = true);
 
     try {
       final result = await FilePicker.platform.pickFiles(
-        type: FileType.audio,
+        type: FileType.custom,
+        allowedExtensions: [
+          'mp3',
+          'm4a',
+          'aac',
+          'wav',
+          'flac',
+          'ogg',
+          'wma',
+          'opus',
+          'aiff',
+        ],
         allowMultiple: true,
-        withData: false, // Don't load file data into memory
-        withReadStream: false,
       );
 
       if (result != null && result.files.isNotEmpty) {
-        int importedCount = 0;
+        final paths = result.files
+            .where((f) => f.path != null)
+            .map((f) => f.path!)
+            .toList();
 
-        for (final file in result.files) {
-          if (file.path != null) {
-            final sourceFile = File(file.path!);
-            if (await sourceFile.exists()) {
-              try {
-                // Copy to import directory
-                final importDir = await FileImportService.getImportDirectory();
-                final destPath = '${importDir.path}/${file.name}';
+        if (paths.isNotEmpty) {
+          // Show progress
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text('Importing ${paths.length} file(s)...'),
+                  ],
+                ),
+                duration: const Duration(seconds: 60),
+                behavior: SnackBarBehavior.floating,
+                backgroundColor: MeloraColors.primary,
+              ),
+            );
+          }
 
-                // Check if file already exists
-                final destFile = File(destPath);
-                if (!await destFile.exists()) {
-                  await sourceFile.copy(destPath);
-                  importedCount++;
-                } else {
-                  // File already exists, skip or rename
-                  importedCount++;
-                }
-              } catch (e) {
-                debugPrint('Error copying file: $e');
-              }
+          final importedCount = await FileImportService.importFromPicker(paths);
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          }
+
+          if (importedCount > 0) {
+            await ref.read(musicCacheServiceProvider).clearCache();
+            ref.invalidate(allSongsProvider);
+            ref.read(musicRefreshProvider.notifier).state++;
+
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('✅ Imported $importedCount song(s)'),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: MeloraColors.success,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              );
+            }
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Files already exist in library'),
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: MeloraColors.warning,
+                ),
+              );
             }
           }
         }
-
-        if (importedCount > 0 && mounted) {
-          // Refresh library
-          await ref.read(musicCacheServiceProvider).clearCache();
-          ref.read(musicRefreshProvider.notifier).state++;
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Imported $importedCount song(s)'),
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: MeloraColors.primary,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          );
-        }
       }
     } on PlatformException catch (e) {
-      // Handle platform exceptions gracefully
-      if (e.code != 'multiple_request') {
-        debugPrint('FilePicker error: ${e.message}');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Import failed: ${e.message}'),
-              behavior: SnackBarBehavior.floating,
-              backgroundColor: MeloraColors.error,
-            ),
-          );
-        }
+      if (e.code != 'multiple_request' && mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
       }
     } catch (e) {
       debugPrint('Import error: $e');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Import failed: $e'),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: MeloraColors.error,
-          ),
-        );
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
       }
     } finally {
-      if (mounted) {
-        setState(() => _isImporting = false);
-      }
+      if (mounted) setState(() => _isImporting = false);
     }
   }
 
@@ -203,38 +202,29 @@ class _OfflineScreenState extends ConsumerState<OfflineScreen>
                     ),
                   ),
                   const Spacer(),
-                  // iOS Import button
+
+                  // ✅ iOS Import button - فقط یک دکمه
                   if (Platform.isIOS)
                     _isImporting
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
+                        ? Container(
+                            width: 40,
+                            height: 40,
+                            padding: const EdgeInsets.all(10),
+                            child: const CircularProgressIndicator(
                               strokeWidth: 2,
                               color: MeloraColors.primary,
                             ),
                           )
                         : IconButton(
                             onPressed: _importFiles,
-                            icon: Icon(
-                              Iconsax.import_1,
-                              color: context.textSecondary,
-                              size: 22,
+                            icon: const Icon(
+                              Iconsax.folder_add,
+                              color: MeloraColors.primary,
+                              size: 24,
                             ),
-                            tooltip: 'Import Files',
+                            tooltip: 'Import from Files',
                           ),
-                  // Filter
-                  IconButton(
-                    onPressed: _showFilterMenu,
-                    icon: Icon(
-                      Iconsax.filter,
-                      color: _filterBy != 'all'
-                          ? MeloraColors.primary
-                          : context.textSecondary,
-                      size: 22,
-                    ),
-                    tooltip: 'Filter',
-                  ),
+
                   // Sort
                   IconButton(
                     onPressed: _showSortMenu,
@@ -245,6 +235,7 @@ class _OfflineScreenState extends ConsumerState<OfflineScreen>
                     ),
                     tooltip: 'Sort',
                   ),
+
                   // Refresh
                   IconButton(
                     onPressed: () async {
@@ -374,7 +365,6 @@ class _OfflineScreenState extends ConsumerState<OfflineScreen>
                   _SongsTab(
                     searchQuery: _searchQuery,
                     sortBy: _sortBy,
-                    filterBy: _filterBy,
                     bottomPadding: bottomPadding,
                     onSongTap: _clearSearchAndUnfocus,
                   ),
@@ -398,111 +388,6 @@ class _OfflineScreenState extends ConsumerState<OfflineScreen>
           ],
         ),
       ),
-    );
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-//  FILTER BOTTOM SHEET
-// ═══════════════════════════════════════════════════════════
-
-class _FilterBottomSheet extends StatelessWidget {
-  final String currentFilter;
-  final ValueChanged<String> onFilterChanged;
-
-  const _FilterBottomSheet({
-    required this.currentFilter,
-    required this.onFilterChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: context.isDark
-            ? MeloraColors.darkSurface
-            : MeloraColors.lightSurface,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      padding: const EdgeInsets.all(MeloraDimens.pagePadding),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: context.textTertiary.withAlpha(77),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-          ),
-          const SizedBox(height: MeloraDimens.lg),
-          Text(
-            'Filter by',
-            style: context.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: MeloraDimens.md),
-          _FilterTile(
-            title: 'All Songs',
-            subtitle: 'Show all songs',
-            icon: Iconsax.music,
-            isSelected: currentFilter == 'all',
-            onTap: () => onFilterChanged('all'),
-          ),
-          _FilterTile(
-            title: 'Recently Played',
-            subtitle: 'Songs you played recently',
-            icon: Iconsax.clock,
-            isSelected: currentFilter == 'recent',
-            onTap: () => onFilterChanged('recent'),
-          ),
-          _FilterTile(
-            title: 'Most Played',
-            subtitle: 'Your top played songs',
-            icon: Iconsax.chart,
-            isSelected: currentFilter == 'most_played',
-            onTap: () => onFilterChanged('most_played'),
-          ),
-          SizedBox(height: context.bottomPadding),
-        ],
-      ),
-    );
-  }
-}
-
-class _FilterTile extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const _FilterTile({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: isSelected ? MeloraColors.primary : context.textSecondary,
-      ),
-      title: Text(title),
-      subtitle: Text(subtitle, style: TextStyle(color: context.textTertiary)),
-      trailing: isSelected
-          ? const Icon(Icons.check, color: MeloraColors.primary)
-          : null,
-      onTap: onTap,
     );
   }
 }
@@ -557,7 +442,6 @@ class _SortBottomSheet extends StatelessWidget {
             ('title', 'Title', Iconsax.text),
             ('artist', 'Artist', Iconsax.microphone),
             ('duration', 'Duration', Iconsax.timer_1),
-            ('play_count', 'Play Count', Iconsax.chart),
             ('size', 'File Size', Iconsax.document),
           ].map(
             (item) => ListTile(
@@ -588,14 +472,12 @@ class _SortBottomSheet extends StatelessWidget {
 class _SongsTab extends ConsumerWidget {
   final String searchQuery;
   final String sortBy;
-  final String filterBy;
   final double bottomPadding;
   final VoidCallback onSongTap;
 
   const _SongsTab({
     required this.searchQuery,
     required this.sortBy,
-    required this.filterBy,
     required this.bottomPadding,
     required this.onSongTap,
   });
@@ -616,13 +498,10 @@ class _SongsTab extends ConsumerWidget {
       case 'duration':
         sorted.sort((a, b) => b.duration.compareTo(a.duration));
         break;
-      case 'play_count':
-        sorted.sort((a, b) => b.playCount.compareTo(a.playCount));
-        break;
       case 'size':
         sorted.sort((a, b) => (b.size ?? 0).compareTo(a.size ?? 0));
         break;
-      default: // date
+      default:
         break;
     }
     return sorted;
@@ -630,12 +509,7 @@ class _SongsTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Choose provider based on filter
-    final songsAsync = filterBy == 'recent'
-        ? ref.watch(recentlyPlayedProvider)
-        : filterBy == 'most_played'
-        ? ref.watch(mostPlayedProvider)
-        : ref.watch(allSongsProvider);
+    final songsAsync = ref.watch(allSongsProvider);
 
     return songsAsync.when(
       loading: () => const Center(
@@ -645,7 +519,7 @@ class _SongsTab extends ConsumerWidget {
         icon: Iconsax.music,
         title: 'No songs found',
         subtitle: Platform.isIOS
-            ? 'Tap + to import music files'
+            ? 'Tap folder icon to import music'
             : 'Grant storage permission to scan music',
         action: TextButton.icon(
           onPressed: () => ref.refresh(allSongsProvider),
@@ -676,14 +550,17 @@ class _SongsTab extends ConsumerWidget {
         if (filtered.isEmpty) {
           return _EmptyState(
             icon: Iconsax.music_dashboard,
-            title: 'No songs found',
-            subtitle: searchQuery.isNotEmpty ? 'Try a different search' : null,
+            title: searchQuery.isNotEmpty ? 'No results found' : 'No songs yet',
+            subtitle: searchQuery.isNotEmpty
+                ? 'Try a different search'
+                : Platform.isIOS
+                ? 'Tap folder icon to import music'
+                : 'Your music will appear here',
           );
         }
 
         return Column(
           children: [
-            // Stats & Shuffle
             Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: MeloraDimens.pagePadding,
@@ -714,7 +591,6 @@ class _SongsTab extends ConsumerWidget {
                 ],
               ),
             ),
-            // Song List
             Expanded(
               child: ListView.builder(
                 padding: EdgeInsets.only(bottom: bottomPadding),
@@ -724,7 +600,6 @@ class _SongsTab extends ConsumerWidget {
                   return SongTile(
                     song: song,
                     index: i,
-                    showPlayCount: sortBy == 'play_count',
                     showSize: sortBy == 'size',
                     onTap: () {
                       onSongTap();
@@ -761,9 +636,10 @@ class _RecentlyPlayedTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final recentAsync = ref.watch(recentlyPlayedProvider);
+    // For now, show all songs as "recent" since we don't have history yet
+    final songsAsync = ref.watch(allSongsProvider);
 
-    return recentAsync.when(
+    return songsAsync.when(
       loading: () => const Center(
         child: CircularProgressIndicator(color: MeloraColors.primary),
       ),
@@ -807,36 +683,6 @@ class _RecentlyPlayedTab extends ConsumerWidget {
                     ),
                   ),
                   const Spacer(),
-                  TextButton(
-                    onPressed: () async {
-                      final confirmed = await showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Clear History?'),
-                          content: const Text(
-                            'This will clear your play history but keep play counts.',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text('Cancel'),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text('Clear'),
-                            ),
-                          ],
-                        ),
-                      );
-                      if (confirmed == true) {
-                        await ref
-                            .read(playHistoryServiceProvider)
-                            .clearHistory();
-                        ref.invalidate(recentlyPlayedProvider);
-                      }
-                    },
-                    child: const Text('Clear'),
-                  ),
                 ],
               ),
             ),
@@ -849,7 +695,6 @@ class _RecentlyPlayedTab extends ConsumerWidget {
                   return SongTile(
                     song: song,
                     index: i,
-                    showPlayCount: true,
                     onTap: () {
                       onSongTap();
                       ref
@@ -869,7 +714,7 @@ class _RecentlyPlayedTab extends ConsumerWidget {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  FOLDERS TAB (keep existing)
+//  FOLDERS TAB
 // ═══════════════════════════════════════════════════════════
 
 class _FoldersTab extends ConsumerWidget {
@@ -1220,14 +1065,12 @@ class _EmptyState extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════
-//  SONG OPTIONS (existing, add play count display)
+//  SONG OPTIONS - ✅ FIX شده
 // ═══════════════════════════════════════════════════════════
 
 void _showSongOptions(BuildContext context, WidgetRef ref, SongModel song) {
   final favService = ref.read(favoritesServiceProvider);
-  final historyService = ref.read(playHistoryServiceProvider);
   final isFav = favService.isFavorite(song.id);
-  final playCount = historyService.getPlayCount(song.id);
 
   showModalBottomSheet(
     context: context,
@@ -1286,17 +1129,6 @@ void _showSongOptions(BuildContext context, WidgetRef ref, SongModel song) {
                             fontSize: 14,
                           ),
                         ),
-                        if (playCount > 0) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            '$playCount plays',
-                            style: const TextStyle(
-                              color: MeloraColors.primary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   ),
@@ -1353,7 +1185,7 @@ void _showSongOptions(BuildContext context, WidgetRef ref, SongModel song) {
               title: 'Song Info',
               onTap: () {
                 Navigator.pop(ctx);
-                _showSongInfo(context, song, playCount);
+                _showSongInfo(context, song);
               },
             ),
 
@@ -1388,7 +1220,8 @@ class _OptionTile extends StatelessWidget {
   }
 }
 
-void _showSongInfo(BuildContext context, SongModel song, int playCount) {
+// ✅ Song Info Dialog - FIX شده
+void _showSongInfo(BuildContext context, SongModel song) {
   showDialog(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -1401,9 +1234,9 @@ void _showSongInfo(BuildContext context, SongModel song, int playCount) {
             _InfoRow('Title', song.displayTitle),
             _InfoRow('Artist', song.displayArtist),
             _InfoRow('Album', song.displayAlbum),
-            _InfoRow('Duration', song.duration.formatted),
-            _InfoRow('Play Count', '$playCount plays'),
-            if (song.size != null) _InfoRow('Size', song.size!.fileSize),
+            _InfoRow('Duration', _formatDuration(song.duration)),
+            if (song.size != null)
+              _InfoRow('Size', _formatFileSize(song.size!)),
             if (song.path != null) _InfoRow('Path', song.path!, maxLines: 4),
           ],
         ),
@@ -1416,6 +1249,22 @@ void _showSongInfo(BuildContext context, SongModel song, int playCount) {
       ],
     ),
   );
+}
+
+// ✅ Helper functions برای format کردن
+String _formatDuration(Duration duration) {
+  final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+  final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  return '$minutes:$seconds';
+}
+
+String _formatFileSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  if (bytes < 1024 * 1024 * 1024) {
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
 }
 
 class _InfoRow extends StatelessWidget {
