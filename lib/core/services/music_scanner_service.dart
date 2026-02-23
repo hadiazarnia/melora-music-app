@@ -13,78 +13,128 @@ class MusicScannerService {
   final oaq.OnAudioQuery _audioQuery = oaq.OnAudioQuery();
   final AudioPlayer _durationPlayer = AudioPlayer();
 
+  // ✅ Guards برای جلوگیری از درخواست‌های همزمان
+  bool _isScanning = false;
+  bool _isRequestingPermission = false;
+  bool? _permissionGranted;
+
   Future<bool> requestPermission() async {
     if (Platform.isIOS) {
       return true;
     }
-    return await _audioQuery.permissionsRequest();
+
+    // اگه قبلاً permission گرفتیم، برگردون
+    if (_permissionGranted != null) {
+      return _permissionGranted!;
+    }
+
+    // اگه در حال درخواست هستیم، صبر نکن
+    if (_isRequestingPermission) {
+      return false;
+    }
+
+    _isRequestingPermission = true;
+
+    try {
+      _permissionGranted = await _audioQuery.permissionsRequest();
+      return _permissionGranted!;
+    } catch (e) {
+      debugPrint('Permission request error: $e');
+      return false;
+    } finally {
+      _isRequestingPermission = false;
+    }
   }
 
   Future<bool> checkPermission() async {
     if (Platform.isIOS) return true;
-    return await _audioQuery.permissionsStatus();
+
+    try {
+      _permissionGranted = await _audioQuery.permissionsStatus();
+      return _permissionGranted!;
+    } catch (e) {
+      return _permissionGranted ?? false;
+    }
   }
 
   Future<List<SongModel>> getAllSongs() async {
+    // ✅ جلوگیری از اسکن همزمان
+    if (_isScanning) {
+      debugPrint('Already scanning, skipping...');
+      return [];
+    }
+
+    _isScanning = true;
     final List<SongModel> allSongs = [];
 
-    // Initialize metadata service
-    await AudioMetadataService.init();
-
-    // 1. Android: Use on_audio_query
-    if (Platform.isAndroid) {
-      try {
-        final songs = await _audioQuery.querySongs(
-          sortType: oaq.SongSortType.DATE_ADDED,
-          orderType: oaq.OrderType.DESC_OR_GREATER,
-          uriType: oaq.UriType.EXTERNAL,
-          ignoreCase: true,
-        );
-
-        allSongs.addAll(
-          songs
-              .where((s) => s.duration != null && s.duration! > 10000)
-              .where((s) => !_isSystemAudio(s.data))
-              .map(_convertSong),
-        );
-      } catch (e) {
-        debugPrint('on_audio_query error: $e');
-      }
-    }
-
-    // 2. Scan imported_audio directory (iOS & Android)
     try {
-      final importedSongs = await _scanImportedDirectory();
-      debugPrint('Found ${importedSongs.length} imported songs');
+      // Initialize metadata service
+      await AudioMetadataService.init();
 
-      final existingPaths = allSongs.map((s) => s.path).toSet();
-      for (final song in importedSongs) {
-        if (!existingPaths.contains(song.path)) {
-          allSongs.add(song);
+      // 1. Android: Use on_audio_query
+      if (Platform.isAndroid) {
+        try {
+          // Check permission first without requesting
+          final hasPermission = await checkPermission();
+          if (!hasPermission) {
+            debugPrint('No permission, skipping media library scan');
+          } else {
+            final songs = await _audioQuery.querySongs(
+              sortType: oaq.SongSortType.DATE_ADDED,
+              orderType: oaq.OrderType.DESC_OR_GREATER,
+              uriType: oaq.UriType.EXTERNAL,
+              ignoreCase: true,
+            );
+
+            allSongs.addAll(
+              songs
+                  .where((s) => s.duration != null && s.duration! > 10000)
+                  .where((s) => !_isSystemAudio(s.data))
+                  .map(_convertSong),
+            );
+          }
+        } catch (e) {
+          debugPrint('on_audio_query error: $e');
         }
       }
-    } catch (e) {
-      debugPrint('Import scan error: $e');
-    }
 
-    // 3. iOS: Also scan Documents directory
-    if (Platform.isIOS) {
+      // 2. Scan imported_audio directory (iOS & Android)
       try {
-        final docSongs = await _scanDocumentsDirectory();
-        debugPrint('Found ${docSongs.length} document songs');
+        final importedSongs = await _scanImportedDirectory();
+        debugPrint('Found ${importedSongs.length} imported songs');
 
         final existingPaths = allSongs.map((s) => s.path).toSet();
-        for (final song in docSongs) {
+        for (final song in importedSongs) {
           if (!existingPaths.contains(song.path)) {
             allSongs.add(song);
           }
         }
       } catch (e) {
-        debugPrint('Documents scan error: $e');
+        debugPrint('Import scan error: $e');
       }
+
+      // 3. iOS: Also scan Documents directory
+      if (Platform.isIOS) {
+        try {
+          final docSongs = await _scanDocumentsDirectory();
+          debugPrint('Found ${docSongs.length} document songs');
+
+          final existingPaths = allSongs.map((s) => s.path).toSet();
+          for (final song in docSongs) {
+            if (!existingPaths.contains(song.path)) {
+              allSongs.add(song);
+            }
+          }
+        } catch (e) {
+          debugPrint('Documents scan error: $e');
+        }
+      }
+
+      debugPrint('Total songs found: ${allSongs.length}');
+    } finally {
+      _isScanning = false;
     }
 
-    debugPrint('Total songs found: ${allSongs.length}');
     return allSongs;
   }
 
@@ -183,7 +233,7 @@ class MusicScannerService {
       path: file.path,
       size: stat.size,
       folder: p.dirname(file.path),
-      albumArt: metadata.artworkPath, // ✅ حالا artwork path داریم
+      albumArt: metadata.artworkPath,
       isOnline: false,
     );
   }

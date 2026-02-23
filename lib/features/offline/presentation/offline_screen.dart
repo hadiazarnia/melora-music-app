@@ -8,7 +8,6 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_dimens.dart';
 import '../../../core/extensions/context_extensions.dart';
-import '../../../core/extensions/duration_extensions.dart'; // ✅ مهم!
 import '../../../core/services/file_import_service.dart';
 import '../../../shared/providers/app_providers.dart';
 import '../../../shared/widgets/melora_search_bar.dart';
@@ -31,6 +30,7 @@ class _OfflineScreenState extends ConsumerState<OfflineScreen>
   String _searchQuery = '';
   String _sortBy = 'date';
   bool _isImporting = false;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
@@ -146,8 +146,8 @@ class _OfflineScreenState extends ConsumerState<OfflineScreen>
           } else {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Files already exist in library'),
+                const SnackBar(
+                  content: Text('Files already exist in library'),
                   behavior: SnackBarBehavior.floating,
                   backgroundColor: MeloraColors.warning,
                 ),
@@ -238,33 +238,59 @@ class _OfflineScreenState extends ConsumerState<OfflineScreen>
 
                   // Refresh
                   IconButton(
-                    onPressed: () async {
-                      HapticFeedback.mediumImpact();
-                      final refresh = ref.read(refreshMusicLibraryProvider);
-                      await refresh();
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('Music library refreshed'),
-                            backgroundColor: MeloraColors.primary,
-                            behavior: SnackBarBehavior.floating,
-                            margin: EdgeInsets.only(
-                              bottom: bottomPadding,
-                              left: 16,
-                              right: 16,
+                    onPressed: _isRefreshing
+                        ? null
+                        : () async {
+                            if (_isRefreshing) return;
+
+                            setState(() => _isRefreshing = true);
+                            HapticFeedback.mediumImpact();
+
+                            try {
+                              final refresh = ref.read(
+                                refreshMusicLibraryProvider,
+                              );
+                              await refresh();
+
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: const Text(
+                                      'Music library refreshed',
+                                    ),
+                                    backgroundColor: MeloraColors.primary,
+                                    behavior: SnackBarBehavior.floating,
+                                    margin: EdgeInsets.only(
+                                      bottom: bottomPadding,
+                                      left: 16,
+                                      right: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                );
+                              }
+                            } finally {
+                              if (mounted) {
+                                setState(() => _isRefreshing = false);
+                              }
+                            }
+                          },
+                    icon: _isRefreshing
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: MeloraColors.primary,
                             ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
+                          )
+                        : Icon(
+                            Iconsax.refresh,
+                            color: context.textSecondary,
+                            size: 22,
                           ),
-                        );
-                      }
-                    },
-                    icon: Icon(
-                      Iconsax.refresh,
-                      color: context.textSecondary,
-                      size: 22,
-                    ),
                     tooltip: 'Refresh',
                   ),
                 ],
