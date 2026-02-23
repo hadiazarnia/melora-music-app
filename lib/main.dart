@@ -1,3 +1,4 @@
+// lib/main.dart
 import 'dart:io';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import 'core/services/favorites_service.dart';
 import 'core/services/music_cache_service.dart';
 import 'core/services/equalizer_service.dart';
 import 'core/services/file_import_service.dart';
+import 'core/services/play_history_service.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'routes/app_router.dart';
@@ -33,6 +35,7 @@ Future<void> main() async {
   await Hive.initFlutter();
   await Hive.openBox('melora_settings');
 
+  // Initialize services
   final favoritesService = FavoritesService();
   await favoritesService.init();
 
@@ -41,6 +44,9 @@ Future<void> main() async {
 
   final equalizerService = EqualizerService();
   await equalizerService.init();
+
+  final playHistoryService = PlayHistoryService();
+  await playHistoryService.init();
 
   final audioHandler = await AudioService.init(
     builder: () => MeloraAudioHandler(),
@@ -65,6 +71,7 @@ Future<void> main() async {
         favoritesServiceProvider.overrideWithValue(favoritesService),
         musicCacheServiceProvider.overrideWithValue(musicCacheService),
         equalizerServiceProvider.overrideWithValue(equalizerService),
+        playHistoryServiceProvider.overrideWithValue(playHistoryService),
       ],
       child: const MeloraApp(),
     ),
@@ -85,6 +92,7 @@ class _MeloraAppState extends ConsumerState<MeloraApp>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _setupFileImport();
+    _setupPlayTracking();
   }
 
   void _setupFileImport() {
@@ -124,6 +132,19 @@ class _MeloraAppState extends ConsumerState<MeloraApp>
     });
   }
 
+  void _setupPlayTracking() {
+    // Listen to song changes and record plays
+    ref.listenManual(currentSongProvider, (previous, next) {
+      final currentSong = next.valueOrNull;
+      final previousSong = previous?.valueOrNull;
+
+      if (currentSong != null && currentSong.id != previousSong?.id) {
+        // Record play for new song
+        ref.read(recordPlayProvider)(currentSong.id);
+      }
+    });
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -133,7 +154,7 @@ class _MeloraAppState extends ConsumerState<MeloraApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Refresh when coming back to app (in case new files were added)
+      // Refresh when coming back to app
     }
   }
 

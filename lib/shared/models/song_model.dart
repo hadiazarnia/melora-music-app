@@ -1,3 +1,4 @@
+// lib/shared/models/song_model.dart
 import 'package:equatable/equatable.dart';
 
 class SongModel extends Equatable {
@@ -13,6 +14,7 @@ class SongModel extends Equatable {
   final String? albumArt;
   final bool isOnline;
   final bool isFavorite;
+  final int playCount;
 
   const SongModel({
     required this.id,
@@ -27,6 +29,7 @@ class SongModel extends Equatable {
     this.albumArt,
     this.isOnline = false,
     this.isFavorite = false,
+    this.playCount = 0,
   });
 
   String get displayTitle =>
@@ -37,6 +40,13 @@ class SongModel extends Equatable {
 
   String get displayAlbum =>
       album.isNotEmpty && album != '<unknown>' ? album : 'Unknown Album';
+
+  String get playCountFormatted {
+    if (playCount >= 1000) {
+      return '${(playCount / 1000).toStringAsFixed(1)}K plays';
+    }
+    return '$playCount plays';
+  }
 
   SongModel copyWith({
     int? id,
@@ -51,6 +61,7 @@ class SongModel extends Equatable {
     String? albumArt,
     bool? isOnline,
     bool? isFavorite,
+    int? playCount,
   }) {
     return SongModel(
       id: id ?? this.id,
@@ -65,6 +76,7 @@ class SongModel extends Equatable {
       albumArt: albumArt ?? this.albumArt,
       isOnline: isOnline ?? this.isOnline,
       isFavorite: isFavorite ?? this.isFavorite,
+      playCount: playCount ?? this.playCount,
     );
   }
 

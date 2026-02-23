@@ -149,6 +149,9 @@
     <!-- ✅ File access -->
     <key>NSFileProviderDomainUsageDescription</key>
     <string>Melora needs access to import audio files.</string>
+
+    <key>NSDocumentsFolderUsageDescription</key>
+    <string>Melora needs access to import audio files from your device.</string>
     
     <!-- ✅ Supports opening files from Files app -->
     <key>LSSupportsOpeningDocumentsInPlace</key>

@@ -1,6 +1,8 @@
+// lib/shared/providers/app_providers.dart
+// اضافه کن به فایل موجود
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:melora_music/core/services/file_import_service.dart';
 import 'package:rxdart/rxdart.dart';
 import '../../core/services/audio_player_service.dart';
 import '../../core/services/music_scanner_service.dart';
@@ -8,6 +10,8 @@ import '../../core/services/favorites_service.dart';
 import '../../core/services/music_cache_service.dart';
 import '../../core/services/equalizer_service.dart';
 import '../../core/services/sleep_timer_service.dart';
+import '../../core/services/play_history_service.dart';
+import '../../core/services/file_import_service.dart';
 import '../models/song_model.dart';
 import '../models/folder_model.dart';
 
@@ -20,15 +24,11 @@ final audioHandlerProvider = Provider<MeloraAudioHandler>((ref) {
 });
 
 final favoritesServiceProvider = Provider<FavoritesService>((ref) {
-  throw UnimplementedError(
-    'favoritesServiceProvider must be overridden in main',
-  );
+  throw UnimplementedError('favoritesServiceProvider must be overridden');
 });
 
 final musicCacheServiceProvider = Provider<MusicCacheService>((ref) {
-  throw UnimplementedError(
-    'musicCacheServiceProvider must be overridden in main',
-  );
+  throw UnimplementedError('musicCacheServiceProvider must be overridden');
 });
 
 final musicScannerProvider = Provider<MusicScannerService>((ref) {
@@ -36,9 +36,11 @@ final musicScannerProvider = Provider<MusicScannerService>((ref) {
 });
 
 final equalizerServiceProvider = Provider<EqualizerService>((ref) {
-  throw UnimplementedError(
-    'equalizerServiceProvider must be overridden in main',
-  );
+  throw UnimplementedError('equalizerServiceProvider must be overridden');
+});
+
+final playHistoryServiceProvider = Provider<PlayHistoryService>((ref) {
+  throw UnimplementedError('playHistoryServiceProvider must be overridden');
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -136,13 +138,20 @@ final allSongsProvider = FutureProvider<List<SongModel>>((ref) async {
   final scanner = ref.read(musicScannerProvider);
   final cacheService = ref.read(musicCacheServiceProvider);
   final favService = ref.read(favoritesServiceProvider);
+  final historyService = ref.read(playHistoryServiceProvider);
 
   // Try cache first
   if (cacheService.hasCachedData) {
     final cachedSongs = cacheService.getCachedSongs();
     if (cachedSongs.isNotEmpty) {
+      final playCounts = historyService.getAllPlayCounts();
       return cachedSongs
-          .map((s) => s.copyWith(isFavorite: favService.isFavorite(s.id)))
+          .map(
+            (s) => s.copyWith(
+              isFavorite: favService.isFavorite(s.id),
+              playCount: playCounts[s.id] ?? 0,
+            ),
+          )
           .toList();
     }
   }
@@ -156,9 +165,15 @@ final allSongsProvider = FutureProvider<List<SongModel>>((ref) async {
   // Cache results
   await cacheService.cacheSongs(songs);
 
-  // Add favorite status
+  // Add favorite status and play counts
+  final playCounts = historyService.getAllPlayCounts();
   return songs
-      .map((s) => s.copyWith(isFavorite: favService.isFavorite(s.id)))
+      .map(
+        (s) => s.copyWith(
+          isFavorite: favService.isFavorite(s.id),
+          playCount: playCounts[s.id] ?? 0,
+        ),
+      )
       .toList();
 });
 
@@ -168,7 +183,6 @@ final foldersProvider = FutureProvider<List<FolderModel>>((ref) async {
   final scanner = ref.read(musicScannerProvider);
   final cacheService = ref.read(musicCacheServiceProvider);
 
-  // Try cache
   if (cacheService.hasCachedData) {
     final cachedFolders = cacheService.getCachedFolders();
     if (cachedFolders.isNotEmpty) {
@@ -207,6 +221,40 @@ final favoriteSongsProvider = FutureProvider<List<SongModel>>((ref) async {
 });
 
 // ═══════════════════════════════════════════════════════════
+//  RECENTLY PLAYED
+// ═══════════════════════════════════════════════════════════
+
+final recentlyPlayedProvider = FutureProvider<List<SongModel>>((ref) async {
+  ref.watch(musicRefreshProvider);
+
+  final historyService = ref.read(playHistoryServiceProvider);
+  final allSongs = await ref.watch(allSongsProvider.future);
+
+  final recentIds = historyService.getRecentlyPlayedIds(limit: 50);
+  final songMap = {for (var s in allSongs) s.id: s};
+
+  return recentIds
+      .where((id) => songMap.containsKey(id))
+      .map((id) => songMap[id]!)
+      .toList();
+});
+
+final mostPlayedProvider = FutureProvider<List<SongModel>>((ref) async {
+  ref.watch(musicRefreshProvider);
+
+  final historyService = ref.read(playHistoryServiceProvider);
+  final allSongs = await ref.watch(allSongsProvider.future);
+
+  final mostPlayedIds = historyService.getMostPlayedIds(limit: 50);
+  final songMap = {for (var s in allSongs) s.id: s};
+
+  return mostPlayedIds
+      .where((id) => songMap.containsKey(id))
+      .map((id) => songMap[id]!)
+      .toList();
+});
+
+// ═══════════════════════════════════════════════════════════
 //  ACTIONS
 // ═══════════════════════════════════════════════════════════
 
@@ -225,6 +273,15 @@ final refreshMusicLibraryProvider = Provider<Future<void> Function()>((ref) {
     final cacheService = ref.read(musicCacheServiceProvider);
     await cacheService.clearCache();
     ref.read(musicRefreshProvider.notifier).state++;
+  };
+});
+
+final recordPlayProvider = Provider<Future<void> Function(int)>((ref) {
+  return (int songId) async {
+    final historyService = ref.read(playHistoryServiceProvider);
+    await historyService.recordPlay(songId);
+    ref.invalidate(recentlyPlayedProvider);
+    ref.invalidate(mostPlayedProvider);
   };
 });
 
@@ -280,6 +337,10 @@ class SleepTimerNotifier extends StateNotifier<Duration?> {
     super.dispose();
   }
 }
+
+// ═══════════════════════════════════════════════════════════
+//  IMPORTED SONGS (iOS)
+// ═══════════════════════════════════════════════════════════
 
 final importedSongsProvider = FutureProvider<List<SongModel>>((ref) async {
   ref.watch(musicRefreshProvider);

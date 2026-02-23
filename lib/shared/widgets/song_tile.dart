@@ -16,6 +16,7 @@ class SongTile extends ConsumerWidget {
   final bool showIndex;
   final bool showSize;
   final bool showDuration;
+  final bool showPlayCount;
   final VoidCallback? onTap;
   final VoidCallback? onOptionsTap;
 
@@ -26,6 +27,7 @@ class SongTile extends ConsumerWidget {
     this.showIndex = false,
     this.showSize = false,
     this.showDuration = true,
+    this.showPlayCount = false,
     this.onTap,
     this.onOptionsTap,
   });
@@ -170,6 +172,9 @@ class SongTile extends ConsumerWidget {
     final parts = <String>[song.displayArtist];
     if (showDuration) {
       parts.add(song.duration.formatted);
+    }
+    if (showPlayCount && song.playCount > 0) {
+      parts.add('${song.playCount} plays');
     }
     if (showSize && song.size != null) {
       parts.add(song.size!.fileSize);
